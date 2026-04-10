@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { users, conversations, conversationMembers, messages, chatUnlocks, applications, jobs, wallets, walletTransactions } from "@/db/schema";
+import { users, conversations, conversationMembers, messages, chatUnlocks, applications, jobs, wallets, walletTransactions, bookings } from "@/db/schema";
 import { eq, and, or, desc, ne, count, exists, sql, gt, inArray } from "drizzle-orm";
 import { getServerUser, requireUser } from "@/lib/get-server-user";
 import Ably from "ably";
@@ -138,12 +138,23 @@ export async function sendMessage({
             .limit(1);
 
           if (!application) {
-            // WHISTLEBLOWER: Local Development Bypass
-            if (process.env.NODE_ENV === "development") {
-              console.warn(`[DEVELOPMENT BYPASS] No unlock found for ${me.userId} -> ${other.userId}, but allowing in DEV mode for testing.`);
-            } else {
-              console.warn(`[SendMessage] Locked: ${me.userId} -> ${other.userId} (No Premium/Unlock/App)`);
-              throw new Error("You must unlock this chat to send messages to this professional.");
+            // C. Check for Confirmed Booking
+            const [booking] = await db.select()
+              .from(bookings)
+              .where(or(
+                and(eq(bookings.parentId, me.userId), eq(bookings.caregiverId, other.userId), inArray(bookings.status, ["confirmed", "paid", "in_progress", "completed"])),
+                and(eq(bookings.parentId, other.userId), eq(bookings.caregiverId, me.userId), inArray(bookings.status, ["confirmed", "paid", "in_progress", "completed"]))
+              ))
+              .limit(1);
+
+            if (!booking) {
+              // WHISTLEBLOWER: Local Development Bypass
+              if (process.env.NODE_ENV === "development") {
+                console.warn(`[DEVELOPMENT BYPASS] No unlock found for ${me.userId} -> ${other.userId}, but allowing in DEV mode for testing.`);
+              } else {
+                console.warn(`[SendMessage] Locked: ${me.userId} -> ${other.userId} (No Premium/Unlock/App/Booking)`);
+                throw new Error("You must unlock this chat to send messages to this professional.");
+              }
             }
           }
         }
@@ -457,6 +468,18 @@ export async function checkChatAccess(otherUserId: string) {
     .limit(1);
 
   if (application) return { hasAccess: true };
+
+  // 3. Is there a confirmed booking?
+  const [booking] = await db.select()
+    .from(bookings)
+    .where(and(
+      eq(bookings.caregiverId, otherUserId),
+      eq(bookings.parentId, firebaseUser.uid),
+      inArray(bookings.status, ["confirmed", "paid", "in_progress", "completed"])
+    ))
+    .limit(1);
+
+  if (booking) return { hasAccess: true };
 
   return { hasAccess: false };
 }
