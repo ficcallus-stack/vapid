@@ -326,7 +326,9 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
                   <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Background Check</span>
                   <div className="flex items-center gap-2 text-primary font-semibold">
                     <MaterialIcon name="check_circle" className="text-green-600 text-sm" fill />
-                    Clear (Oct 2026)
+                    {nanny.backgroundCheckDate 
+                      ? `Clear (${format(new Date(nanny.backgroundCheckDate), 'MMM yyyy')})` 
+                      : "Clear (Active)"}
                   </div>
                 </div>
                 <div className="space-y-2">

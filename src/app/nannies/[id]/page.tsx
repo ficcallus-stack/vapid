@@ -1,7 +1,7 @@
 import { MaterialIcon } from "@/components/MaterialIcon";
 import { cn } from "@/lib/utils";
 import { db } from "@/db";
-import { users, nannyProfiles, reviews, bookings, examSubmissions } from "@/db/schema";
+import { users, nannyProfiles, reviews, bookings, examSubmissions, caregiverVerifications } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
@@ -49,9 +49,11 @@ const getNanny = cache(async (id: string) => {
     carDescription: nannyProfiles.carDescription,
     isGhost: users.isGhost,
     isPremium: users.isPremium,
+    backgroundCheckDate: caregiverVerifications.backgroundAuthTimestamp,
   })
   .from(users)
   .innerJoin(nannyProfiles, eq(users.id, nannyProfiles.id))
+  .leftJoin(caregiverVerifications, eq(users.id, caregiverVerifications.id))
   .where(eq(users.id, id))
   .limit(1);
 
