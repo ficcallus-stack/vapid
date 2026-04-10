@@ -88,7 +88,7 @@ function Step4Inner({ data, updateData, onNext, total, paymentIntentId, hours, s
                 <span className="font-bold text-primary">${subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-on-surface-variant">Service fee</span>
+                <span className="text-on-surface-variant">Platform Service Fee (7.5%)</span>
                 <span className="font-bold text-primary">${fee.toFixed(2)}</span>
               </div>
               {(featuredFee > 0 || boostFee > 0 || priorityFee > 0) && (
@@ -253,7 +253,7 @@ function Step4Inner({ data, updateData, onNext, total, paymentIntentId, hours, s
                   <span className="font-bold">${subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-on-primary-container font-medium">
-                  <span className="text-sm">Escrow Service Fee</span>
+                  <span className="text-sm">Platform Service Fee (7.5%)</span>
                   <span className="font-bold">${fee.toFixed(2)}</span>
                 </div>
                 {featuredFee > 0 && (
@@ -331,7 +331,7 @@ export default function Step4({ data, updateData, onNext, onBack }: Step4Props &
   const minRate = data.minRate || 25;
   const hours = Object.values(data.schedule || {}).filter(Boolean).length * 2 || 4; // Default to 4h if no schedule
   const subtotal = minRate * hours;
-  const fee = 5.0;
+  const fee = subtotal * 0.075;
   const featuredFee = data.isFeatured ? 10.0 : 0;
   const boostFee = data.isBoosted ? 5.0 : 0;
   const priorityFee = data.isFastTrack ? 10.0 : 0;
