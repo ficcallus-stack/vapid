@@ -40,11 +40,24 @@ export default async function OpenRolesPage() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+      <style dangerouslySetInnerHTML={{ __html: `
+        .editorial-title {
+          line-height: 0.9;
+          letter-spacing: -0.05em;
+        }
+      `}} />
+
       {/* Editorial Header Section */}
-      <header className="mb-12">
-        <h1 className="font-headline font-extrabold text-5xl md:text-6xl text-primary tracking-tighter mb-4 italic">Open Roles</h1>
-        <p className="text-on-surface-variant text-lg md:text-xl max-w-2xl leading-relaxed font-medium">
-          Discover bespoke opportunities with families who value premium care. Every role is curated to match your professional excellence.
+      <header className="mb-16 pt-8">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-secondary-container/20 rounded-full mb-6">
+           <span className="material-symbols-outlined text-sm text-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
+           <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Curated Opportunities</span>
+        </div>
+        <h1 className="font-headline font-black text-6xl md:text-8xl text-primary editorial-title mb-6 italic">
+          Open <span className="text-secondary">Roles.</span>
+        </h1>
+        <p className="text-on-surface-variant text-xl md:text-2xl max-w-2xl leading-tight font-medium opacity-60">
+          Discover bespoke opportunities with families who value professional excellence and premium care.
         </p>
       </header>
 
