@@ -45,20 +45,36 @@ export default function Step5({ data, availableChildren, onEdit, onSubmit, onBac
     ? weeklyRetainerNum 
     : (hourlyRateNum * hoursPerWeekNum);
 
+  const dutiesDisplay = typeof data.duties === 'string' 
+    ? data.duties 
+    : (data.duties && Object.keys(data.duties).length > 0 
+        ? Object.entries(data.duties).filter(([_, v]) => v).map(([k]) => k).join(", ")
+        : "");
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 w-full animate-in fade-in slide-in-from-bottom-8 duration-700">
       <div className="lg:col-span-9 space-y-12">
         {/* Header Section */}
         <header>
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed rounded-full text-[10px] font-black tracking-widest uppercase mb-4 shadow-sm border border-tertiary-fixed-dim">
-            <MaterialIcon name="star" className="text-sm" fill />
-            Premium Performance Enabled
+          <div className="flex items-center gap-4 mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed rounded-full text-[10px] font-black tracking-widest uppercase shadow-sm border border-tertiary-fixed-dim">
+              <MaterialIcon name="star" className="text-sm" fill />
+              Premium Performance Enabled
+            </div>
+            {data.isLive && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-black tracking-widest uppercase shadow-lg shadow-emerald-500/20 animate-pulse">
+                <MaterialIcon name="verified" className="text-sm" fill />
+                Listing is Live
+              </div>
+            )}
           </div>
           <h1 className="text-5xl lg:text-7xl font-extrabold font-headline text-primary tracking-tighter italic leading-[1] mb-6">
-            Review & <span className="text-secondary italic">Post Job</span>
+            {data.isLive ? "Finalize" : "Review"} & <span className="text-secondary italic">{data.isLive ? "Confirm" : "Post Job"}</span>
           </h1>
           <p className="text-on-surface-variant text-lg max-w-xl font-medium opacity-60 italic leading-relaxed">
-            Finalize the details of your household requirements to connect with our elite caregiver network.
+            {data.isLive 
+              ? "Your job is now active. Review your details below and make any final adjustments to your briefing."
+              : "Finalize the details of your household requirements to connect with our elite caregiver network."}
           </p>
         </header>
 
@@ -89,11 +105,11 @@ export default function Step5({ data, availableChildren, onEdit, onSubmit, onBac
                   </p>
                </div>
                
-               {data.duties && (
+               {dutiesDisplay && (
                   <div className="pt-6 border-t border-outline-variant/10 space-y-2">
                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/40 ml-2">Daily Duties & Expectations</p>
                      <p className="text-on-surface-variant leading-relaxed text-base italic font-medium opacity-70 pl-2">
-                       {data.duties}
+                       {dutiesDisplay}
                      </p>
                   </div>
                )}
@@ -325,7 +341,7 @@ export default function Step5({ data, availableChildren, onEdit, onSubmit, onBac
                 onClick={onSubmit}
                 className="w-full py-6 bg-secondary text-primary font-black rounded-3xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-secondary/20 flex items-center justify-center gap-3 group/post"
               >
-                 Post Job to Kindred Circle
+                 {data.isLive ? "Finish & View Dashboard" : "Post Job to Kindred Circle"}
                  <MaterialIcon name="arrow_forward" className="group-hover/post:translate-x-2 transition-transform" />
               </button>
               <p className="mt-6 text-[9px] text-center text-primary-fixed/20 uppercase tracking-[0.4em] font-black">Priority Placement Active</p>

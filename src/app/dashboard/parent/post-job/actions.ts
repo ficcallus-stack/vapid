@@ -303,3 +303,31 @@ export async function createJob(data: any) {
   revalidatePath("/dashboard/parent");
   revalidatePath("/jobs");
 }
+
+export async function updateJobRecord(jobId: string, data: any) {
+  const user = await requireUser();
+  
+  // Rate limit
+  const { success } = await rateLimit(`updateJob:${user.uid}`, "strict");
+  if (!success) throw new Error("Too many requests.");
+
+  const { description, duties, requirements, language, title, location, duration, minRate, maxRate, startDate } = data;
+
+  await db.update(jobs).set({
+    description: description || undefined,
+    duties: duties || undefined,
+    requirements: requirements || undefined,
+    language: language || undefined,
+    title: title || undefined,
+    location: location || undefined,
+    duration: duration || undefined,
+    minRate: minRate || undefined,
+    maxRate: maxRate || undefined,
+    startDate: startDate ? new Date(startDate) : undefined,
+    updatedAt: new Date(),
+  }).where(and(eq(jobs.id, jobId), eq(jobs.parentId, user.uid)));
+
+  revalidatePath("/dashboard/parent");
+  revalidatePath(`/dashboard/nanny/open-roles/${jobId}`);
+  revalidatePath("/jobs");
+}

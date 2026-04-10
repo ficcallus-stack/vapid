@@ -6,393 +6,164 @@ import { MaterialIcon } from "@/components/MaterialIcon";
 import { cn } from "@/lib/utils";
 import { syncUser } from "@/lib/user-sync";
 import { jobs, applications, users, nannyProfiles, children, bookings, parentProfiles } from "@/db/schema";
-import { eq, desc, and, count } from "drizzle-orm";
+import { eq, desc, and, count, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { format } from "date-fns";
 
-import { FamilyOverviewHero } from "@/components/dashboard/FamilyOverviewHero";
-import { CareTeamGrid } from "@/components/dashboard/CareTeamGrid";
-import { HouseholdManualEditor } from "@/components/dashboard/HouseholdManualEditor";
-import { SeriesManager } from "@/components/dashboard/SeriesManager";
+import { FamilyHomeHeader } from "@/components/dashboard/FamilyHomeHeader";
+import { CareTeamBento } from "@/components/dashboard/CareTeamBento";
+import { ApplicantHub } from "@/components/dashboard/ApplicantHub";
 import { FamilyBudgetWidget } from "@/components/dashboard/FamilyBudgetWidget";
-import { LiveStatusTracker } from "@/components/dashboard/LiveStatusTracker";
 import { CareActivityFeed } from "@/components/dashboard/CareActivityFeed";
-import { Scrapbook } from "@/components/dashboard/Scrapbook";
-import { TrialConversionPrompt } from "@/components/dashboard/TrialConversionPrompt";
+import { HouseholdManualEditor } from "@/components/dashboard/HouseholdManualEditor";
 import { getCareTeam, getBookingSeries, getFamilyFinancials, getActivityFeed } from "./care-team/actions";
-import { getScrapbookMilestones } from "../nanny/care-actions";
 import { getActiveCareOverview } from "./bookings/actions";
-import { UpcomingCareWidget } from "@/components/dashboard/UpcomingCareWidget";
 
 export default async function FamilyDashboard() {
   const user = await syncUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const userId = user.id;
 
-  // 1. Fetch Profile Data
-  const parentProfile = await db.query.parentProfiles.findFirst({
-    where: eq(parentProfiles.id, userId),
-  });
+  // 1. Parallel Data Fetching
+  const [
+    parentProfile,
+    myChildren,
+    activeCareBookings,
+    familyFinancials,
+    activityFeed,
+    careTeamMembers,
+    activeApplicants
+  ] = await Promise.all([
+    db.query.parentProfiles.findFirst({ where: eq(parentProfiles.id, userId) }),
+    db.query.children.findMany({ where: eq(children.parentId, userId) }),
+    getActiveCareOverview(),
+    getFamilyFinancials(),
+    getActivityFeed(),
+    getCareTeam(),
+    db.select({
+      id: applications.id,
+      jobId: jobs.id,
+      jobTitle: jobs.title,
+      nannyName: users.fullName,
+      nannyImage: users.profileImageUrl,
+      status: applications.status,
+    })
+    .from(applications)
+    .innerJoin(jobs, eq(applications.jobId, jobs.id))
+    .innerJoin(users, eq(applications.caregiverId, users.id))
+    .where(and(eq(jobs.parentId, userId), eq(applications.status, "pending")))
+    .orderBy(desc(applications.createdAt))
+    .limit(5)
+  ]);
 
-  // 1b. Fetch Care Team
-  const careTeamMembers = await getCareTeam();
-
-  // 1c. Fetch Booking Series
-  const activeSeries = await getBookingSeries();
-
-  // 1d. Fetch Monthly Financials
-  const familyFinancials = await getFamilyFinancials();
-
-  // 1e. Fetch Activity Ledger (Stage 4)
-  const activityFeed = await getActivityFeed();
-
-  // 1f. Fetch Scrapbook Milestones (Stage 5)
-  const scrapbookMilestones = await getScrapbookMilestones();
-
-  // 1g. Fetch Recent Trials for Conversion (Stage 6)
-  const completedTrial = await db.query.bookings.findFirst({
-    where: and(
-        eq(bookings.parentId, userId),
-        eq(bookings.status, "completed"),
-        eq(bookings.isTrial, true)
-    ),
-    with: {
-        caregiver: true
-    },
-    orderBy: [desc(bookings.endDate)]
-  });
-
-  // 1h. Fetch Active/Pending Care for Overview
-  const activeCareBookings = await getActiveCareOverview();
+  // 2. Business Logic: Shift Status
   const liveBooking = activeCareBookings.find(b => b.status === "in_progress");
+  const nextScheduled = activeCareBookings
+    .filter(b => b.status === "confirmed" && b.startDate > new Date())
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())[0];
 
-  // 2. Fetch Children
-  const myChildren = await db.query.children.findMany({
-    where: eq(children.parentId, userId),
-  });
-
-  // 3. Fetch Applicants Hub (Latest 2)
-  const myApplicants = await db.select({
-    id: applications.id,
-    jobId: jobs.id,
-    jobTitle: jobs.title,
-    nannyName: users.fullName,
-    nannyImage: users.profileImageUrl,
-    nannyRate: nannyProfiles.hourlyRate,
-    nannyLocation: nannyProfiles.location,
-    status: applications.status,
-    caregiverId: users.id,
-  })
-  .from(applications)
-  .innerJoin(jobs, eq(applications.jobId, jobs.id))
-  .innerJoin(users, eq(applications.caregiverId, users.id))
-  .leftJoin(nannyProfiles, eq(users.id, nannyProfiles.id))
-  .where(and(eq(jobs.parentId, userId), eq(applications.status, "pending")))
-  .orderBy(desc(applications.createdAt))
-  .limit(2);
-
-  // 4. Statistics (Job counts, Booking counts)
-  const [activeJobsCount] = await db.select({ count: count() }).from(jobs).where(and(eq(jobs.parentId, userId), eq(jobs.status, "open")));
-  const [activeBookingsCount] = await db.select({ count: count() }).from(bookings).where(and(eq(bookings.parentId, userId), eq(bookings.status, "confirmed")));
-  const totalPastBookings = await db.select({ count: count() }).from(bookings).where(and(eq(bookings.parentId, userId), eq(bookings.status, "completed")));
-
-  const familyName = parentProfile?.familyName || user.fullName || "Your";
-  const familyBio = "Welcome to your family dashboard. Start by updating your profile and child details to find your perfect match.";
-  const location = parentProfile?.location || "Location not set";
+  const profile = {
+    familyName: parentProfile?.familyName || user.fullName.split(' ')[0],
+    location: parentProfile?.location || "Manhattan, NY",
+    familyPhoto: parentProfile?.familyPhoto || ""
+  };
 
   return (
-    <div className="bg-surface min-h-screen">
-      {/* Mobile Sidebar / Shared Sidebar logic would be in a layout, but here we overhauled the page content */}
-      
-      <main className="p-6 lg:p-10 max-w-7xl mx-auto space-y-12 animate-in fade-in duration-700">
-        
-        {/* 1. Family Identity & Edit Hub */}
-        <FamilyOverviewHero 
-          initialProfile={{
-            familyName: familyName,
-            bio: parentProfile?.bio || familyBio,
-            philosophy: parentProfile?.philosophy || "",
-            location: location,
-            familyPhoto: parentProfile?.familyPhoto || ""
-          }}
-          userId={userId}
-        />
-
-        {/* 2. My Core Care Team (Overhaul Stage 1) */}
-        <section className="space-y-8 animate-in slide-in-from-bottom duration-700">
-          <div className="flex items-center justify-between px-2">
-            <div>
-               <h2 className="font-headline text-3xl font-black text-primary tracking-tighter italic leading-none">The Core Care Team</h2>
-               <p className="text-on-surface-variant text-sm font-medium opacity-60 mt-2">Your trusted, regular caregivers.</p>
+    <div className="bg-surface-container-low/30 min-h-screen pb-32">
+      {/* Dynamic Nav (Ported logic from HTML) */}
+      <nav className="w-full sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-outline-variant/10">
+        <div className="flex justify-between items-center px-8 h-20 max-w-7xl mx-auto">
+          <div className="flex items-center gap-12">
+            <span className="text-2xl font-black tracking-tighter text-primary italic">KindredCare US</span>
+            <div className="hidden md:flex gap-8 items-center">
+              <Link className="font-bold tracking-tight text-primary border-b-2 border-primary pb-1" href="/dashboard/parent">Dashboard</Link>
+              <Link className="font-bold tracking-tight text-on-surface-variant/40 hover:text-primary transition-colors" href="/dashboard/parent/jobs">Find Nannies</Link>
+              <Link className="font-bold tracking-tight text-on-surface-variant/40 hover:text-primary transition-colors" href="/dashboard/messages">Messages</Link>
+              <Link className="font-bold tracking-tight text-on-surface-variant/40 hover:text-primary transition-colors" href="/dashboard/parent/settings">Family Hub</Link>
             </div>
-            <Link href="/dashboard/parent/care-team" className="text-link font-black text-[10px] uppercase tracking-[0.3em] flex items-center gap-2 hover:underline underline-offset-8 transition-all opacity-40 hover:opacity-100">
-              Manage Team <MaterialIcon name="arrow_forward" className="text-sm" />
-            </Link>
           </div>
-        </section>
-
-        {/* --- RECURRING OVERHAUL SUITE (Stages 2, 3, 4, 6) --- */}
-        <div className="space-y-12">
-          {/* 1a. Trial Conversion Prompt (Stage 6) */}
-          {completedTrial && (
-             <TrialConversionPrompt 
-                caregiverName={completedTrial.caregiver.fullName}
-                caregiverId={completedTrial.caregiver.id}
-             />
-          )}
-
-          {/* 2a. Live Pulse (Final Stage 4) */}
-          <LiveStatusTracker 
-            channelName={`family-presence:${user.id}`} 
-            nannyName={liveBooking?.caregiver?.fullName || activeSeries[0]?.caregiverName || "Caregiver"} 
-            isActive={!!liveBooking}
-            startTime={liveBooking?.startDate}
-          />
-
-          {/* 2a-2. Upcoming & Active Care Widget (New Itemized Visibility) */}
-          <UpcomingCareWidget bookings={activeCareBookings} />
-
-          {/* 2b. Series Manager (Overhaul Stage 2) */}
-          <SeriesManager series={activeSeries} />
-
-          {/* 2c. Financial Hub (Overhaul Stage 3) */}
-          <FamilyBudgetWidget financials={familyFinancials} />
-
-          {/* 2d. Activity Ledger (Final Stage 4) */}
-          <CareActivityFeed events={activityFeed} />
-
-          {/* 2e. Shared Legacy Scrapbook (Final Stage 5) */}
-          <Scrapbook milestones={scrapbookMilestones} />
+          <div className="flex items-center gap-6">
+             <div className="h-10 w-10 rounded-full bg-slate-200 overflow-hidden ring-2 ring-white shadow-xl">
+                <img className="w-full h-full object-cover" src={user.profileImageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.fullName}`} alt="User" />
+             </div>
+          </div>
         </div>
+      </nav>
 
-        {/* 3. Child Mini-Profiles */}
-        <section className="space-y-8 opacity-60 hover:opacity-100 transition-opacity">
-          <div className="flex items-center justify-between px-2">
-            <h2 className="font-headline text-3xl font-black text-primary tracking-tighter italic leading-none">Little Kindreds</h2>
-            <Link href="/dashboard/parent/children" className="text-link font-black text-[10px] uppercase tracking-[0.3em] flex items-center gap-2 hover:underline underline-offset-8 transition-all">
-              Manage Profiles <MaterialIcon name="arrow_forward" className="text-sm" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {myChildren.map((child) => (
-              <div key={child.id} className="bg-white p-8 rounded-[3rem] shadow-sm hover:shadow-xl transition-all group border border-outline-variant/5">
-                <div className="flex items-center gap-8">
-                  <div className="relative shrink-0">
-                    <img 
-                      alt={child.name} 
-                      className="w-24 h-24 rounded-[2rem] object-cover grayscale group-hover:grayscale-0 transition-all duration-700 shadow-xl border-4 border-white"
-                      src={child.photoUrl || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${child.name}`} 
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <h3 className="font-headline text-2xl font-black text-primary leading-none tracking-tight">{child.name}, {child.age}</h3>
-                    <div className="flex flex-wrap gap-2">
-                       <span className="px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed text-[9px] font-black uppercase tracking-widest rounded-full">{child.type}</span>
-                       {/* Mock tags based on bio for design parity */}
-                       <span className="px-3 py-1 bg-secondary-fixed/30 text-secondary text-[9px] font-black uppercase tracking-widest rounded-full border border-secondary/10">Active</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            <Link 
-              href="/dashboard/parent/children/add"
-              className="bg-dashed border-4 border-dashed border-outline-variant/30 p-8 rounded-[3rem] flex flex-col items-center justify-center gap-3 text-on-surface-variant hover:border-primary hover:text-primary transition-all group bg-white/50"
-            >
-              <MaterialIcon name="add_circle" className="text-4xl group-hover:scale-125 transition-transform" />
-              <span className="font-black uppercase tracking-widest text-[10px]">Add Little One</span>
-            </Link>
-          </div>
-        </section>
+      <main className="p-6 md:p-12 max-w-7xl mx-auto space-y-12">
+        {/* 1. Header (Portrait + Kids) */}
+        <FamilyHomeHeader profile={profile} children={myChildren} />
 
-        {/* 4. Household Hub (Overhaul Stage 1) */}
-        <section className="space-y-8 animate-in slide-in-from-bottom duration-700">
-          <div className="flex items-center justify-between px-2">
-            <div>
-               <h2 className="font-headline text-3xl font-black text-primary tracking-tighter italic leading-none">Household Hub</h2>
-               <p className="text-on-surface-variant text-sm font-medium opacity-60 mt-2">Core guidelines for your Care Team.</p>
-            </div>
-          </div>
-          <HouseholdManualEditor initialValue={parentProfile?.householdManual || ""} />
-        </section>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 2. Bento Grid Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* Applicants Hub */}
           <div className="lg:col-span-8 space-y-10">
-            <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-outline-variant/5 h-full relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-secondary-fixed/10 rounded-full blur-[100px] -z-0"></div>
-               <div className="relative z-10">
-                <div className="flex items-center justify-between mb-10">
-                  <div>
-                    <h2 className="font-headline text-3xl font-black text-primary tracking-tighter italic leading-none">Applicants Hub</h2>
-                    <p className="text-on-surface-variant text-sm font-medium opacity-60 mt-2">Active candidates for your open positions.</p>
+            {/* Core Care Team Section */}
+            <section className="space-y-6">
+              <div className="flex justify-between items-center px-2">
+                <h2 className="text-2xl font-black text-primary italic tracking-tight underline decoration-secondary decoration-4 underline-offset-8">Core Care Team</h2>
+                <Link href="/dashboard/parent/care-team" className="text-secondary font-black text-[10px] uppercase tracking-widest hover:underline">Manage Team</Link>
+              </div>
+              <CareTeamBento activeMember={liveBooking?.caregiver} nextScheduled={nextScheduled} />
+            </section>
+
+            {/* Applicant Hub */}
+            <ApplicantHub applicants={activeApplicants} />
+            
+            {/* Household Hub Ledger (Integrated Feed) */}
+            <section className="space-y-6">
+               <h2 className="text-2xl font-black text-primary italic tracking-tight ml-2">Household Activity</h2>
+               <div className="bg-white rounded-[3.5rem] p-10 premium-shadow">
+                  <CareActivityFeed events={activityFeed} />
+               </div>
+            </section>
+          </div>
+
+          <aside className="lg:col-span-4 space-y-10">
+            {/* Financial Widget */}
+            <FamilyBudgetWidget financials={familyFinancials} />
+
+            {/* Household Manual Quick Links */}
+            <section className="bg-primary text-white p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group">
+               <div className="absolute -top-10 -right-10 w-32 h-32 bg-secondary-fixed/5 rounded-full blur-3xl group-hover:scale-150 transition-transform"></div>
+               <div className="relative z-10 space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="font-bold text-xl italic tracking-tight">Home Manual</h2>
+                    <MaterialIcon name="sticky_note_2" />
                   </div>
-                  {myApplicants.length > 0 && (
-                    <span className="px-4 py-1.5 bg-secondary-container text-primary text-[10px] font-black rounded-full uppercase tracking-widest shadow-lg shadow-black/5">{myApplicants.length} New</span>
-                  )}
-                </div>
-                
-                <div className="space-y-4">
-                  {myApplicants.length > 0 ? (
-                    myApplicants.map((app) => (
-                      <div key={app.id} className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 rounded-full bg-surface-container-low/50 hover:bg-white border border-transparent hover:border-outline-variant/10 transition-all group lg:pr-8">
-                        <div className="flex items-center gap-6">
-                           <div className="relative">
-                              <img 
-                                alt={app.nannyName} 
-                                className="w-16 h-16 rounded-2xl object-cover shadow-lg group-hover:scale-105 transition-transform"
-                                src={app.nannyImage || `https://api.dicebear.com/7.x/avataaars/svg?seed=${app.nannyName}`} 
-                              />
-                           </div>
-                           <div>
-                             <h4 className="font-headline text-2xl font-black text-primary leading-none tracking-tight">{app.nannyName}</h4>
-                             <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant opacity-30 mt-1 whitespace-nowrap font-label">
-                               For: {app.jobTitle}
-                             </p>
-                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 w-full md:w-auto">
-                          <Link 
-                            href={`/dashboard/messages/user/${app.caregiverId}`}
-                            className="w-14 h-14 bg-white text-primary rounded-2xl hover:bg-primary-container transition-all shadow-sm flex items-center justify-center shrink-0 border border-outline-variant/10"
-                          >
-                            <MaterialIcon name="chat" fill />
-                          </Link>
-                          <Link 
-                            href={`/dashboard/parent/jobs/${app.jobId}/applications`}
-                            className="flex-1 md:flex-none px-10 py-5 bg-[#1e293b] text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl hover:scale-[1.02] transition-all text-center font-label"
-                          >
-                            View Application
-                          </Link>
-                        </div>
+                  <p className="text-xs text-white/50 leading-relaxed font-medium">Quick access for caregivers to essential home rules and emergency contacts.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {["Emergency", "Allergies", "Wi-Fi", "Security"].map(tag => (
+                      <div key={tag} className="bg-white/10 hover:bg-white/20 p-3 rounded-xl flex items-center gap-2 cursor-pointer transition-all active:scale-95">
+                         <MaterialIcon name="emergency" className="text-secondary-fixed-dim text-sm" fill />
+                         <span className="text-[10px] font-black uppercase tracking-tight">{tag}</span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="py-20 flex flex-col items-center justify-center text-center opacity-30 italic px-4">
-                      <MaterialIcon name="person_search" className="text-6xl mb-6" />
-                      <p className="font-headline font-bold text-xl">Waiting for talent.</p>
-                      <p className="text-xs mt-2 uppercase tracking-widest">Post a job to start meeting elite caregivers.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Sub-counters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-              <div className="bg-white rounded-[3rem] p-8 shadow-sm border border-outline-variant/10 flex flex-col justify-between h-56 group overflow-hidden relative">
-                 <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-primary/5 rounded-full group-hover:scale-150 transition-transform"></div>
-                 <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <MaterialIcon name="work" className="text-primary" />
-                    <h3 className="font-headline text-2xl font-black text-primary italic leading-none tracking-tight">Active Jobs</h3>
+                    ))}
                   </div>
-                  <p className="text-on-surface-variant text-sm font-medium opacity-60">You have <span className="text-primary font-black uppercase tracking-widest">{activeJobsCount.count} listings</span> open.</p>
-                </div>
-                <div className="relative z-10 flex items-center justify-between mt-auto">
-                   <div className="flex items-center gap-2">
-                     <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-black text-xs border-4 border-white shadow-xl">{activeJobsCount.count}</div>
-                     <span className="text-xs font-bold text-on-surface-variant">Active</span>
-                   </div>
-                   <Link href="/dashboard/parent/jobs" className="text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:translate-x-1 transition-transform">
-                    Manage <MaterialIcon name="chevron_right" />
-                   </Link>
-                </div>
-              </div>
-
-              <div className="bg-primary text-white rounded-[3rem] p-8 shadow-2xl flex flex-col justify-between h-56 relative overflow-hidden group">
-                 <div className="absolute -top-4 -left-4 w-32 h-32 bg-white/5 rounded-full blur-2xl group-hover:scale-110 transition-transform"></div>
-                 <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <MaterialIcon name="calendar_today" />
-                    <h3 className="font-headline text-2xl font-black italic leading-none tracking-tight">Booking Flow</h3>
-                  </div>
-                  <p className="text-primary-fixed text-sm font-medium opacity-70 italic">{activeBookingsCount.count} Confirmed • {totalPastBookings[0].count} Memories</p>
-                </div>
-                <div className="relative z-10">
-                  <Link href="/dashboard/parent/bookings" className="w-full py-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
-                    <MaterialIcon name="history" className="text-sm" />
-                    View History
+                  <Link href="/dashboard/parent/settings" className="block w-full py-4 border border-white/10 text-center rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-all">
+                    Edit Guidelines
                   </Link>
-                </div>
-              </div>
-            </div>
-          </div>
+               </div>
+            </section>
 
-          {/* Sidebar Modules (Right Column) */}
-          <div className="lg:col-span-4 space-y-10">
-            {/* Subscription Module (Kindred Elite) */}
-            <div className="bg-gradient-to-br from-primary to-primary-container text-white rounded-[3rem] p-10 shadow-2xl relative overflow-hidden group">
-              <div className="absolute -right-20 -top-20 w-64 h-64 bg-secondary-fixed/20 rounded-full blur-[100px] animate-pulse"></div>
-              <div className="relative z-10 space-y-8">
-                <div className="flex justify-between items-start">
-                  <div className="bg-white/10 p-4 rounded-[1.5rem] shadow-inner">
-                    <MaterialIcon name={user.isPremium ? "verified" : "workspace_premium"} className="text-4xl text-secondary-container" style={{ fontVariationSettings: "'FILL' 1" }} />
-                  </div>
-                  <span className="px-4 py-1 bg-secondary-container text-primary text-[10px] font-black rounded-full uppercase tracking-widest shadow-xl shadow-black/20">
-                    {user.isPremium ? "Active" : "Elite Plan"}
-                  </span>
+            {/* Elite Upsell */}
+            <section className="bg-gradient-to-br from-secondary-fixed-dim via-secondary-container to-secondary-fixed p-10 rounded-[3.5rem] relative overflow-hidden group shadow-2xl shadow-secondary/10">
+              <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
+              <div className="relative z-10 space-y-6">
+                <div className="flex items-center gap-2">
+                  <MaterialIcon name="workspace_premium" className="text-on-secondary-fixed" fill />
+                  <span className="text-[9px] font-black uppercase tracking-[0.3em] text-on-secondary-fixed">Elite Membership</span>
                 </div>
-                <div>
-                  <h3 className="font-headline text-3xl font-black italic tracking-tighter leading-none">{user.isPremium ? "Elite Status" : "Kindred Elite"}</h3>
-                  <p className="text-primary-fixed text-sm font-black uppercase tracking-[0.2em] opacity-40 mt-2">
-                    {user.isPremium ? "Benefits Unlocked" : "$23.00 / month"}
-                  </p>
-                </div>
-                <div className="space-y-4 pt-4 border-t border-white/5">
-                  {["Priority Application Feed", "$1M Liability Buffer", "Advanced Safety Screening"].map(benefit => (
-                    <div key={benefit} className="flex items-center gap-3 text-xs font-black uppercase tracking-widest opacity-80 italic">
-                      <MaterialIcon name="check_circle" className="text-secondary-fixed text-sm" fill />
-                      {benefit}
-                    </div>
-                  ))}
-                </div>
-                {user.isPremium ? (
-                  <Link href="/dashboard/parent/subscription" className="block w-full py-6 bg-white/10 text-white font-black uppercase tracking-widest text-[11px] rounded-[1.5rem] hover:bg-white/20 transition-all text-center">
-                    Manage Benefits
-                  </Link>
-                ) : (
-                  <Link href="/dashboard/parent/subscription" className="block w-full py-6 bg-secondary-container text-primary font-black uppercase tracking-widest text-[11px] rounded-[1.5rem] shadow-xl shadow-black/30 hover:scale-105 active:scale-95 transition-all text-center">
-                    Activate Elite
-                  </Link>
-                )}
+                <h3 className="text-3xl font-black text-on-secondary-fixed tracking-tighter leading-none">Upgrade to Kindred Elite</h3>
+                <p className="text-on-secondary-fixed-variant text-sm font-medium leading-relaxed opacity-80 italic">Unlock priority placement, zero booking fees, and 24/7 concierge support.</p>
+                <button className="w-full py-5 bg-on-secondary-fixed text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:-translate-y-1 active:translate-y-0 transition-all">Start 14-Day Free Trial</button>
               </div>
-            </div>
-
-            {/* Care Memories Preview */}
-            <div className="bg-white rounded-[3rem] p-8 border border-outline-variant/10 shadow-sm relative overflow-hidden">
-              <h4 className="font-headline text-2xl font-black text-primary mb-8 tracking-tighter italic">Care Memories</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="aspect-square bg-surface-container-low rounded-[1.5rem] overflow-hidden group">
-                  <img 
-                    src="https://images.unsplash.com/photo-1542810634-71277d95dcbb?q=80&w=2070&auto=format&fit=crop" 
-                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000"
-                    alt="Memory"
-                  />
-                </div>
-                <div className="aspect-square bg-surface-container-low rounded-[1.5rem] overflow-hidden group">
-                  <img 
-                    src="https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?q=80&w=2038&auto=format&fit=crop" 
-                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000"
-                    alt="Memory"
-                  />
-                </div>
-              </div>
-              <button className="w-full mt-8 text-[10px] font-black uppercase tracking-widest text-primary hover:text-secondary opacity-40 hover:opacity-100 transition-all underline underline-offset-8">
-                Explore Scrapbook
-              </button>
-            </div>
-          </div>
+            </section>
+          </aside>
         </div>
       </main>
 
-      {/* FAB: Create Action */}
+      {/* FAB: Post Job */}
       <Link 
         href="/dashboard/parent/post-job"
         className="fixed bottom-10 right-10 w-20 h-20 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center group hover:scale-110 active:scale-90 transition-all z-40 border-4 border-white/50 backdrop-blur-md"
