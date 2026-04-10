@@ -52,7 +52,9 @@ export default async function BrowseNannies({ searchParams }: { searchParams: Pr
   // 3b. Matching Algorithm Weights (MATCH-01)
   const matchScore = sql<number>`(
     (CASE WHEN ${nannyProfiles.isVerified} THEN 500 ELSE 0 END) +
-    (CASE WHEN ${distanceSql} < 30 THEN ((30 - ${distanceSql}) / 30.0) * 200 ELSE 0 END) +
+    ${distanceSql 
+      ? sql`(CASE WHEN ${distanceSql} < 30 THEN ((30 - ${distanceSql}) / 30.0) * 200 ELSE 0 END)` 
+      : sql`0`} +
     (LEAST(${nannyProfiles.experienceYears}, 15) * 20) +
     (CASE WHEN ${nannyProfiles.updatedAt} > NOW() - INTERVAL '7 days' THEN 100 ELSE 0 END)
   )`.as('match_score');
