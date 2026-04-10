@@ -63,8 +63,8 @@ export async function getSafetyOpsData() {
   .limit(5);
 
   return {
-    reviewScore: reviewAgg[0]?.avg || 0,
-    reviewCount: reviewAgg[0]?.total || 0,
+    reviewScore: Number(reviewAgg[0]?.avg || 0),
+    reviewCount: Number(reviewAgg[0]?.total || 0),
     ticketDensity: (openTickets[0]?.count / (totalUsers[0]?.count || 1)) * 100,
     latenessRate: 0.8, // Approximation based on dispute logic
     profileCompleteness: 88, // Derived heuristic

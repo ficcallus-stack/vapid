@@ -82,6 +82,7 @@ export default function PostJobPage() {
         setFormData(prev => ({
           ...prev,
           ...(draft as any),
+          retainerBudget: (draft as any).retainerBudget ? (draft as any).retainerBudget / 100 : prev.retainerBudget,
           childCount: (draft as any).childCount || children.length || prev.childCount,
         }));
         setHasDraft(true);

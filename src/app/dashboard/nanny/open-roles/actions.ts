@@ -34,10 +34,17 @@ export async function getOpenJobs(options: FilterOptions = {}) {
 
   // Base query with relations
   let query = db.query.jobs.findMany({
-    where: (jobs, { and, eq, gte, lte }) => {
+    where: (jobs, { and, eq, gte, lte, or }) => {
         const filters = [eq(jobs.status, "open")];
         if (jobType && jobType !== 'all') filters.push(eq(jobs.scheduleType, jobType));
-        if (minRate) filters.push(gte(jobs.minRate, minRate));
+        
+        if (minRate) {
+            filters.push(or(
+                gte(jobs.minRate, minRate),
+                gte(jobs.retainerBudget, minRate * 100 * 40) // Equivalency: Rate * 100 (cents) * 40hrs
+            ) as any);
+        }
+        
         if (maxRate) filters.push(lte(jobs.maxRate, maxRate));
         return and(...filters);
     },

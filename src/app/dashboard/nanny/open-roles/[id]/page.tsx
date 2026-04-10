@@ -8,6 +8,7 @@ import { users, nannyProfiles, applications } from "@/db/schema";
 import { requireUser } from "@/lib/get-server-user";
 import { eq, and } from "drizzle-orm";
 import ApplyButton from "./ApplyButton";
+import JobScheduleGrid from "@/components/JobScheduleGrid";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const TIMES = [
@@ -148,7 +149,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 <div className="flex gap-8">
                   <div className="flex flex-col">
                     <span className="text-[10px] uppercase tracking-[0.2em] font-black opacity-60 mb-1">
-                        {job.scheduleType === 'recurring' ? 'Weekly Budget' : 'Hourly Investment'}
+                        {job.scheduleType === 'recurring' ? 'Weekly Retainer' : 'Hourly Investment'}
                     </span>
                     <span className="text-4xl font-black font-headline italic tracking-tighter decoration-secondary decoration-2 underline-offset-8 underline">
                       {job.scheduleType === 'recurring' 
@@ -157,13 +158,17 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                       }
                     </span>
                   </div>
-                  <div className="w-px h-12 bg-white/20"></div>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-[0.2em] font-black opacity-60 mb-1">Requirement</span>
-                    <span className="text-4xl font-black font-headline italic tracking-tighter">
-                       {isRetainer ? "40 hrs" : `${totalWeeklyHours} hrs`}
-                    </span>
-                  </div>
+                  {!isRetainer && (
+                    <>
+                      <div className="w-px h-12 bg-white/20"></div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-[0.2em] font-black opacity-60 mb-1">Requirement</span>
+                        <span className="text-4xl font-black font-headline italic tracking-tighter">
+                           {`${totalWeeklyHours} hrs`}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -204,6 +209,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               
               <ApplyButton jobId={awaitedParams.id} isVerified={isVerified} hasApplied={hasApplied} familyName={job.profile?.familyName} fullWidth />
             </div>
+            
+            {/* Conditional Schedule Grid for Ad-Hoc */}
+            {!isRetainer && (
+              <div className="lg:col-span-12 animate-in fade-in slide-in-from-bottom-6 duration-1000">
+                <JobScheduleGrid schedule={job.schedule || {}} />
+              </div>
+            )}
           </div>
 
           {/* Child Profiles Section */}

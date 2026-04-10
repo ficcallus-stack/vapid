@@ -76,15 +76,18 @@ export async function synthesizeDemand(jobCount: number) {
   const generateRate = (type: "weekly" | "hourly") => {
     const isOutlier = Math.random() < 0.2;
     if (type === "weekly") {
-        // mostly 700-1450, outlier 300-5000
+        // Range: 300 - 1550, must be divisible by 50
         const min = isOutlier ? 300 : 700;
-        const max = isOutlier ? 5000 : 1450;
-        return Math.floor(Math.random() * (max - min) + min) * 100; // in cents
+        const max = isOutlier ? 1550 : 1450;
+        const amount = Math.floor(Math.random() * (max - min + 1)) + min;
+        const rounded = Math.round(amount / 50) * 50;
+        return Math.min(Math.max(300, rounded), 1550) * 100; // in cents
     } else {
-        // mostly 20-32, outlier 15-150
+        // Range: 15 - 35
         const min = isOutlier ? 15 : 20;
-        const max = isOutlier ? 150 : 32;
-        return Math.floor(Math.random() * (max - min) + min) * 100; // in cents
+        const max = isOutlier ? 35 : 32;
+        const amount = Math.floor(Math.random() * (max - min + 1)) + min;
+        return Math.min(Math.max(15, amount), 35) * 100; // in cents
     }
   };
 
@@ -112,13 +115,21 @@ export async function synthesizeDemand(jobCount: number) {
       // 5. Generate Schedule
       const schedule: Record<string, boolean> = {};
       if (template.scheduleType === "recurring") {
-        ["mon", "tue", "wed", "thu", "fri"].forEach(day => {
+        // mon-fri (1-5)
+        [1, 2, 3, 4, 5].forEach(dayIdx => {
             if (template.type === "Elite Full-Time") {
-                schedule[`${day}_am`] = true;
-                schedule[`${day}_pm`] = true;
+                schedule[`${dayIdx}_2`] = true; // Morning
+                schedule[`${dayIdx}_3`] = true; // Afternoon
             } else {
-                schedule[`${day}_pm`] = true; 
+                schedule[`${dayIdx}_3`] = true; // Afternoon
             }
+        });
+      } else {
+        // One-time: Pick 3-5 random slots across 2-3 days
+        const targetDays = [1, 2, 3, 4, 5].sort(() => 0.5 - Math.random()).slice(0, 3);
+        targetDays.forEach(dayIdx => {
+            const slotIdx = Math.floor(Math.random() * 6);
+            schedule[`${dayIdx}_${slotIdx}`] = true;
         });
       }
 
@@ -133,8 +144,8 @@ export async function synthesizeDemand(jobCount: number) {
         description: template.description,
         hiringType: template.hiringType as any,
         scheduleType: template.scheduleType as any,
-        minRate: template.scheduleType === "one_time" ? (rate / 100) : 0, // Keeping for backward compatibility if needed
-        maxRate: template.scheduleType === "one_time" ? (rate / 100) + 10 : 0,
+        minRate: Math.floor(template.scheduleType === "one_time" ? (rate / 100) : (rate / 100 / 40)), 
+        maxRate: Math.floor(template.scheduleType === "one_time" ? (rate / 100) + 10 : (rate / 100 / 40) + 10),
         retainerBudget: template.scheduleType === "recurring" ? rate : null,
         budget: template.scheduleType === "recurring" ? `$${rate/100}/wk` : `$${rate/100}/hr`,
         location: profile?.location || "United States",
