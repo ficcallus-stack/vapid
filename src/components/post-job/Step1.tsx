@@ -363,7 +363,7 @@ export default function Step1({ availableChildren = [], data, updateData, onNext
 
         {/* NEW SECTION: Location & Start/End Dates */}
         <div className="bg-surface-container-lowest p-8 rounded-[2.5rem] border border-outline-variant/10 shadow-sm relative overflow-hidden group space-y-8">
-           <div className="space-y-4 relative z-10 w-full">
+           <div className="space-y-4 relative z-20 w-full">
               <label className="text-sm font-black uppercase tracking-widest text-primary italic flex items-center gap-2">
                  <MaterialIcon name="location_on" className="text-lg" />
                  Job Location
