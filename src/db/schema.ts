@@ -144,8 +144,6 @@ export const parentProfiles = pgTable("parent_profiles", {
   location: text("location"),
   bio: text("bio"),
   philosophy: text("philosophy"), // NEW: Family parenting style
-  parentDescription: text("parent_description"), // For AI Gen
-  partnerDescription: text("partner_description"), // For AI Gen
   householdManual: text("household_manual"), 
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),

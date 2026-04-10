@@ -161,16 +161,3 @@ export const uploadExamSchema = z.object({
 });
 
 export type UploadExamInput = z.infer<typeof uploadExamSchema>;
-
-export const updateParentProfileSchema = z.object({
-  familyName: z.string().max(200).optional(),
-  familyPhoto: z.string().url().or(z.literal("")).optional(),
-  location: z.string().max(200).optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  philosophy: z.string().max(5000).optional(),
-  parentDescription: z.string().max(2000).optional(),
-  partnerDescription: z.string().max(2000).optional(),
-});
-
-export type UpdateParentProfileInput = z.infer<typeof updateParentProfileSchema>;

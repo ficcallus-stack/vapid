@@ -9,7 +9,7 @@ import Step2 from "@/components/post-job/Step2";
 import Step3 from "@/components/post-job/Step3";
 import Step4 from "@/components/post-job/Step4";
 import Step5 from "@/components/post-job/Step5";
-import { createJob, getLatestJobDraft, upsertJobDraft, deleteJobDraft, updateJobRecord } from "./actions";
+import { createJob, getLatestJobDraft, upsertJobDraft, deleteJobDraft } from "./actions";
 import { getChildren } from "../children/actions";
 import { getParentProfile } from "../settings/actions";
 import { useToast } from "@/components/Toast";
@@ -38,8 +38,6 @@ export default function PostJobPage() {
     retainerBudget: 1200,
     latitude: 0,
     longitude: 0,
-    isLive: false,
-    id: undefined as string | undefined,
   });
   const [hasDraft, setHasDraft] = useState(false);
   const router = useRouter();
@@ -85,7 +83,6 @@ export default function PostJobPage() {
           ...prev,
           ...(draft as any),
           childCount: (draft as any).childCount || children.length || prev.childCount,
-          isLive: !(draft as any).isDraft,
         }));
         setHasDraft(true);
       } else if (profile || children.length > 0) {
@@ -101,7 +98,7 @@ export default function PostJobPage() {
 
   // Save to DB on step change (Background sync)
   useEffect(() => {
-    if (step > 1 && (formData.location || formData.description) && !formData.isLive) {
+    if (step > 1 && (formData.location || formData.description)) {
       const timer = setTimeout(() => {
         upsertJobDraft(formData).catch(console.error);
       }, 5000); // Throttled longer since local is primary
@@ -122,10 +119,6 @@ export default function PostJobPage() {
   };
 
   const handleSaveAsDraft = async () => {
-    if (formData.isLive) {
-       showToast("This job is already live!", "info");
-       return;
-    }
     localStorage.setItem("kindred_job_draft", JSON.stringify({ ...formData, step }));
     await upsertJobDraft(formData);
     showToast("Progress saved!", "success");
@@ -192,27 +185,13 @@ export default function PostJobPage() {
     if (s < step) setStep(s);
   };
 
-  const handlePaySuccess = async (paymentIntentId: string) => {
+  const handleSubmit = async () => {
+    if (!canGoNext()) return;
     setIsSubmitting(true);
-    const updatedForm = { ...formData, stripePaymentIntentId: paymentIntentId };
-    setFormData(updatedForm);
-
     try {
-      // 1. Post JSON record immediately after payment success
-      const result = await createJob(updatedForm as any);
+      await createJob(formData as any);
       
-      // 2. Mark as live & capture ID
-      setFormData(prev => ({ 
-        ...prev, 
-        id: (result as any)?.id || prev.id,
-        isLive: true 
-      }));
-      localStorage.removeItem("kindred_job_draft"); // Clear local draft as it's live now
-      
-      // 3. Move to Review/Celebration step
-      setStep(5);
-      
-      // 4. Celebration!
+      // Celebration!
       confetti({
         particleCount: 150,
         spread: 70,
@@ -220,43 +199,16 @@ export default function PostJobPage() {
         colors: ["#3b82f6", "#f59e0b", "#10b981", "#ef4444"]
       });
 
+      await deleteJobDraft(); // Clear draft on success
       showToast("Job posted successfully!", "success");
+      
+      // Deliberate delay for confetti satisfaction
+      setTimeout(() => {
+        router.push("/dashboard/parent");
+      }, 2000);
     } catch (error: any) {
-      console.error("Failed to post job after payment:", error);
-      showToast(error.message || "Something went wrong. Your payment is secure, but we couldn't create the listing. Please contact support.", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (formData.isLive) {
-       setIsSubmitting(true);
-       try {
-         // Push any final refinements made after the immediate post
-         const jobId = (formData as any).id;
-         if (jobId) {
-            await updateJobRecord(jobId, formData);
-         }
-         router.push("/dashboard/parent");
-       } catch (error: any) {
-         showToast(error.message || "Failed to update job refinements.", "error");
-       } finally {
-         setIsSubmitting(false);
-       }
-       return;
-    }
-    
-    // This fallback is only for if they somehow bypassed Step 4 success logic
-    if (!canGoNext()) return;
-    setIsSubmitting(true);
-    try {
-      const result = await createJob(formData as any);
-      setFormData(prev => ({ ...prev, isLive: true, id: (result as any)?.id || prev.id }));
-      showToast("Job posted successfully!", "success");
-      router.push("/dashboard/parent");
-    } catch (error: any) {
-      showToast(error.message || "Failed to post job.", "error");
+      console.error("Failed to create job:", error);
+      showToast(error.message || "Failed to post job. Please try again.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -365,7 +317,7 @@ export default function PostJobPage() {
               {step === 1 && <Step1 availableChildren={availableChildren} data={formData} updateData={updateData} onNext={nextStep} onCancel={() => router.push("/dashboard/parent")} />}
               {step === 2 && <Step2 data={formData} updateData={updateData} onNext={nextStep} onBack={prevStep} />}
               {step === 3 && <Step3 data={formData} updateData={updateData} onNext={nextStep} onBack={prevStep} />}
-              {step === 4 && <Step4 data={formData} updateData={updateData} onNext={handlePaySuccess} onBack={prevStep} />}
+              {step === 4 && <Step4 data={formData} updateData={updateData} onNext={(id) => { updateData({ stripePaymentIntentId: id }); nextStep(true); }} onBack={prevStep} />}
               {step === 5 && <Step5 data={formData} availableChildren={availableChildren} onEdit={goToStep} onBack={prevStep} onSubmit={handleSubmit} />}
             </div>
           </div>
@@ -402,7 +354,7 @@ export default function PostJobPage() {
               onClick={step === 5 ? handleSubmit : () => nextStep()}
               className="bg-primary text-on-primary px-10 py-3.5 rounded-xl font-headline font-extrabold text-sm shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale"
             >
-              {isSubmitting ? "Processing..." : step === 5 ? (formData.isLive ? "Finish" : "Post Job Now") : "Next Step"}
+              {isSubmitting ? "Processing..." : step === 5 ? "Post Job Now" : "Next Step"}
             </button>
           </div>
         </div>
