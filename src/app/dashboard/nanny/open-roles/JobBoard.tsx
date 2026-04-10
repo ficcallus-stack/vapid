@@ -209,7 +209,13 @@ export default function JobBoard({ initialJobs }: JobBoardProps) {
                                     <div className="grid grid-cols-2 gap-8 mb-8">
                                         <div className="space-y-2">
                                             <p className="text-[10px] font-black text-on-surface-variant/30 uppercase tracking-[0.2em] font-label">Investment</p>
-                                            <p className="text-2xl font-black text-primary italic tracking-tight">${job.minRate}<span className="text-xs opacity-30">/hr</span></p>
+                                            <p className="text-2xl font-black text-primary italic tracking-tight">
+                                                {job.scheduleType === 'recurring' 
+                                                    ? `$${(job.retainerBudget || 0) / 100}` 
+                                                    : `$${job.minRate}`
+                                                }
+                                                <span className="text-xs opacity-30">/{job.scheduleType === 'recurring' ? 'wk' : 'hr'}</span>
+                                            </p>
                                         </div>
                                         <div className="space-y-2 text-right">
                                             <p className="text-[10px] font-black text-on-surface-variant/30 uppercase tracking-[0.2em] font-label">Location</p>

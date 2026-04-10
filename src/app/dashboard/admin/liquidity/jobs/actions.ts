@@ -47,7 +47,7 @@ export async function synthesizeDemand(jobCount: number) {
   const logs: string[] = [];
   let successCount = 0;
 
-  // 1. Fetch all Ghost Parents
+  // 1. Fetch all Ghost Parents and Existing Open Jobs
   const ghostParents = await db.query.users.findMany({
     where: and(eq(users.isGhost, true), eq(users.role, "parent")),
     with: {
@@ -56,14 +56,41 @@ export async function synthesizeDemand(jobCount: number) {
     } as any
   });
 
-  if (ghostParents.length === 0) {
-    throw new Error("No ghost families found. Seed families first.");
+  const openJobs = await db.query.jobs.findMany({
+    where: eq(jobs.status, "open"),
+    columns: { parentId: true }
+  });
+
+  const parentsWithJobs = new Set(openJobs.map(j => j.parentId));
+  const availableParents = ghostParents.filter(p => !parentsWithJobs.has(p.id));
+
+  if (availableParents.length === 0) {
+    throw new Error("CRITICAL: No available parents found. All existing parents already have open roles. Please seed more parents first.");
   }
 
-  for (let i = 0; i < jobCount; i++) {
+  const jobsToSeed = Math.min(jobCount, availableParents.length);
+  if (jobsToSeed < jobCount) {
+    logs.push(`⚠️ WARNING: Deficiency detected. Requested ${jobCount} jobs but only ${availableParents.length} parents are available without open roles. Seeding ${availableParents.length} jobs.`);
+  }
+
+  const generateRate = (type: "weekly" | "hourly") => {
+    const isOutlier = Math.random() < 0.2;
+    if (type === "weekly") {
+        // mostly 700-1450, outlier 300-5000
+        const min = isOutlier ? 300 : 700;
+        const max = isOutlier ? 5000 : 1450;
+        return Math.floor(Math.random() * (max - min) + min) * 100; // in cents
+    } else {
+        // mostly 20-32, outlier 15-150
+        const min = isOutlier ? 15 : 20;
+        const max = isOutlier ? 150 : 32;
+        return Math.floor(Math.random() * (max - min) + min) * 100; // in cents
+    }
+  };
+
+  for (let i = 0; i < jobsToSeed; i++) {
     try {
-      // 2. Sample Parent
-      const parent = ghostParents[Math.floor(Math.random() * ghostParents.length)];
+      const parent = availableParents[i];
       const householdChildren = (parent as any).children || [];
       const profile = (parent as any).parentProfile;
 
@@ -79,8 +106,6 @@ export async function synthesizeDemand(jobCount: number) {
         : "our children";
       
       let title = template.title.replace("$NAMES", selectedNames);
-      let description = template.description;
-      
       const windowHours = ["6 PM - 11 PM", "5 PM - 10 PM", "7 PM - Midnight"][Math.floor(Math.random() * 3)];
       title = title.replace("$WINDOW", windowHours);
 
@@ -92,10 +117,12 @@ export async function synthesizeDemand(jobCount: number) {
                 schedule[`${day}_am`] = true;
                 schedule[`${day}_pm`] = true;
             } else {
-                schedule[`${day}_pm`] = true; // Afternoon tutor
+                schedule[`${day}_pm`] = true; 
             }
         });
       }
+
+      const rate = generateRate(template.scheduleType === "recurring" ? "weekly" : "hourly");
 
       // 6. SQL Insertion
       const jobId = `ignite-job-${crypto.randomUUID()}`;
@@ -103,12 +130,13 @@ export async function synthesizeDemand(jobCount: number) {
         id: jobId,
         parentId: parent.id,
         title,
-        description,
+        description: template.description,
         hiringType: template.hiringType as any,
         scheduleType: template.scheduleType as any,
-        minRate: template.minRate,
-        maxRate: template.maxRate,
-        budget: `$${template.minRate}-$${template.maxRate}/hr`,
+        minRate: template.scheduleType === "one_time" ? (rate / 100) : 0, // Keeping for backward compatibility if needed
+        maxRate: template.scheduleType === "one_time" ? (rate / 100) + 10 : 0,
+        retainerBudget: template.scheduleType === "recurring" ? rate : null,
+        budget: template.scheduleType === "recurring" ? `$${rate/100}/wk` : `$${rate/100}/hr`,
         location: profile?.location || "United States",
         latitude: profile?.latitude,
         longitude: profile?.longitude,
@@ -126,11 +154,15 @@ export async function synthesizeDemand(jobCount: number) {
         updatedAt: new Date(),
       } as any);
 
-      logs.push(`✅ [${template.type}] Synthesized for ${parent.fullName} (${selectedNames})`);
+      logs.push(`✅ [${template.type}] Synthesized for ${parent.fullName} | Rate: ${template.scheduleType === "recurring" ? `$${rate/100}/wk` : `$${rate/100}/hr`}`);
       successCount++;
     } catch (err: any) {
       logs.push(`❌ Synthesis Error: ${err.message}`);
     }
+  }
+
+  if (jobsToSeed < jobCount) {
+    logs.push(`🛑 IGNITE STOPPED: Ran out of available parents. Please seed more families to create the remaining ${jobCount - jobsToSeed} jobs.`);
   }
 
   revalidatePath("/dashboard/admin/liquidity/jobs/manage");

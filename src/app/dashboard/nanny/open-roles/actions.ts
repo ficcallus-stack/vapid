@@ -65,6 +65,7 @@ export async function getOpenJobs(options: FilterOptions = {}) {
     schedule: job.schedule as Record<string, boolean>,
     minRate: job.minRate,
     maxRate: job.maxRate,
+    retainerBudget: job.retainerBudget,
     createdAt: job.createdAt,
     parentName: (job.parent as any).parentProfile?.familyName,
     parentPhoto: (job.parent as any).parentProfile?.familyPhoto,

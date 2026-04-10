@@ -147,9 +147,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               <div className="absolute bottom-8 left-8 text-white">
                 <div className="flex gap-8">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase tracking-[0.2em] font-black opacity-60 mb-1">Weekly Budget</span>
+                    <span className="text-[10px] uppercase tracking-[0.2em] font-black opacity-60 mb-1">
+                        {job.scheduleType === 'recurring' ? 'Weekly Budget' : 'Hourly Investment'}
+                    </span>
                     <span className="text-4xl font-black font-headline italic tracking-tighter decoration-secondary decoration-2 underline-offset-8 underline">
-                      {isRetainer ? `$${job.retainerBudget}` : `$${job.minRate}/hr`}
+                      {job.scheduleType === 'recurring' 
+                        ? `$${(job.retainerBudget || 0) / 100}/wk` 
+                        : `$${job.minRate}/hr`
+                      }
                     </span>
                   </div>
                   <div className="w-px h-12 bg-white/20"></div>
