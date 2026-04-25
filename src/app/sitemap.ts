@@ -20,7 +20,6 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       { url: `${BASE_URL}/terms`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
       { url: `${BASE_URL}/cookies`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.6 },
       { url: `${BASE_URL}/browse`, lastModified: new Date(), changeFrequency: 'daily', priority: 0.9 },
-      { url: `${BASE_URL}/register/nanny`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.8 },
     ];
   }
 

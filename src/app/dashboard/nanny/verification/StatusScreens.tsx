@@ -3,6 +3,9 @@
 import { MaterialIcon } from "@/components/MaterialIcon";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { revokeVerification } from "./actions";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
 
 interface StatusScreenProps {
   user: any;
@@ -183,101 +186,141 @@ export function SuccessState({ user }: StatusScreenProps) {
 
 // PENDING STATE
 export function PendingState({ user }: StatusScreenProps) {
+  const firstName = user?.fullName?.split(" ")[0] || "Caregiver";
+
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000">
-      <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-16 items-center mb-32">
-        <div className="lg:col-span-7 space-y-10">
-          <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-tertiary-fixed rounded-full text-on-tertiary-fixed font-headline text-[10px] font-black tracking-widest uppercase shadow-xl shadow-tertiary/10">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-on-tertiary-fixed opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-on-tertiary-fixed"></span>
-            </span>
-            Review Process Active
+    <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000 pb-20">
+      <div className="max-w-5xl mx-auto">
+        {/* Header: Positive Reinforcement */}
+        <section className="text-center mb-20 space-y-8">
+          <div className="inline-flex items-center gap-3 px-6 py-2.5 bg-emerald-50 rounded-full text-emerald-700 font-headline text-[10px] font-black tracking-[0.2em] uppercase border border-emerald-100 shadow-sm">
+            <MaterialIcon name="check_circle" className="text-sm" fill />
+            Dossier Submitted Successfully
           </div>
-          <h1 className="text-5xl lg:text-7xl font-headline font-black text-primary leading-tight tracking-tighter italic">
-            We're reviewing <br/><span className="text-secondary italic">your dossier.</span>
+          <h1 className="text-5xl lg:text-8xl font-headline font-black text-primary leading-[0.95] tracking-tighter italic">
+            You're doing <br/><span className="text-secondary italic">great, {firstName}!</span>
           </h1>
-          <p className="text-lg text-on-surface-variant font-medium leading-relaxed max-w-xl italic opacity-80">
-            Thank you for submitting your documentation! Our safety team is currently verifying your background screening and identification assets to ensure the highest standards of care.
-            <span className="block mt-6 font-black text-primary uppercase text-[10px] tracking-widest italic leading-none opacity-40">Timeline Expectation</span>
-            <span className="block mt-2 font-black text-primary text-2xl italic tracking-tight">Vetting usually takes less than 24 hours.</span>
+          <p className="text-xl text-on-surface-variant font-medium leading-relaxed max-w-2xl mx-auto italic opacity-70">
+            Sending your verification request was the best move for your professional growth. Our safety team is now verifying your assets to unlock your elite status.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6">
-            <div className="bg-surface-container-low p-8 rounded-[2.5rem] border-l-[6px] border-tertiary shadow-xl shadow-black/[0.02]">
-              <MaterialIcon name="verified" className="text-tertiary text-3xl mb-4" />
-              <h3 className="font-headline font-black text-primary mb-2 italic tracking-tight">Safety Protocol</h3>
-              <p className="text-xs text-on-surface-variant font-medium italic opacity-60">Multi-point verification to maintain unconditional trust.</p>
+          
+          <div className="flex flex-col items-center gap-6 pt-4">
+            <div className="bg-surface-container-low px-8 py-4 rounded-3xl border border-outline-variant/10 inline-flex items-center gap-4">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+              </span>
+              <span className="text-xs font-black italic text-primary uppercase tracking-widest">Vetting Stage: Active</span>
+              <span className="w-px h-4 bg-outline-variant/20 mx-2"></span>
+              <span className="text-[10px] font-bold text-on-surface-variant/40 italic">Expected: &lt; 24 hours</span>
             </div>
-            <div className="bg-surface-container-low p-8 rounded-[2.5rem] border-l-[6px] border-secondary shadow-xl shadow-black/[0.02]">
-              <MaterialIcon name="bolt" className="text-secondary text-3xl mb-4" />
-              <h3 className="font-headline font-black text-primary mb-2 italic tracking-tight">Expedited Queue</h3>
-              <p className="text-xs text-on-surface-variant font-medium italic opacity-60">You'll be notified immediately upon approval via SMS and App.</p>
-            </div>
+            <RevokeButton />
           </div>
-        </div>
+        </section>
 
-        <div className="lg:col-span-5 relative">
-          <div className="relative z-10 shadow-2xl rounded-[4rem] overflow-hidden bg-white p-3 rotate-3">
-            <div className="relative aspect-square overflow-hidden rounded-[3.5rem]">
-              <img 
-                alt="Caregiver Team" 
-                className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 transition-all duration-1000" 
-                src="https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&q=80&w=800" 
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent" />
-              <div className="absolute bottom-8 left-8 right-8 bg-white/95 backdrop-blur-xl p-6 rounded-[2rem] flex items-center gap-5 shadow-2xl">
-                <div className="bg-primary p-3 rounded-2xl shadow-xl shadow-primary/20">
-                  <MaterialIcon name="workspace_premium" className="text-white text-2xl" />
-                </div>
+        {/* The Professional Program Upsell */}
+        <section className="mb-24">
+          <div className="bg-primary rounded-[4rem] p-12 lg:p-20 text-white relative overflow-hidden shadow-2xl shadow-primary/30">
+            {/* Visual Accents */}
+            <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-white/5 rounded-full -mr-64 -mt-64 blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-96 h-96 bg-secondary/10 rounded-full -ml-32 -mb-32 blur-2xl"></div>
+
+            <div className="relative z-10 grid lg:grid-cols-2 gap-16 items-center">
+              <div className="space-y-10">
                 <div>
-                  <p className="text-[9px] font-black text-primary uppercase tracking-[0.2em] mb-1 italic opacity-40 leading-none">Status Track</p>
-                  <p className="text-sm font-black text-primary italic tracking-tight">Vetting Stage: Active</p>
+                  <div className="flex items-center gap-3 mb-6">
+                    <MaterialIcon name="workspace_premium" className="text-secondary text-4xl" fill />
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-100/60">Elite Certification</span>
+                  </div>
+                  <h2 className="text-4xl md:text-5xl font-black font-headline tracking-tighter leading-none italic mb-6">
+                    Professional <br/>Caregiver Program
+                  </h2>
+                  <div className="flex items-center gap-4 mb-8">
+                    <span className="text-4xl font-black italic text-secondary">$45</span>
+                    <span className="text-lg font-bold text-white/30 line-through italic decoration-2">$120</span>
+                  </div>
+                  <p className="text-lg text-blue-100/70 font-medium italic leading-relaxed">
+                    Elevate your visibility and earning potential. Our all-in-one program includes Identity Verification, Background Check, and the Global Care Standards Exam to unlock Elite Status.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    "ID Verification & Safety Check",
+                    "Global Care Standards Exam",
+                    "Elite 'Core Care' Badge",
+                    "3x Marketplace Visibility"
+                  ].map((benefit, i) => (
+                    <div key={i} className="flex items-center gap-4 text-sm font-bold italic">
+                      <MaterialIcon name="check_circle" className="text-secondary" fill size={20} />
+                      {benefit}
+                    </div>
+                  ))}
+                </div>
+
+                <Link href="/dashboard/nanny/certifications" className="btn bg-white text-primary px-10 py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-2xl transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-center gap-4 w-full sm:w-fit">
+                  Enroll & Start Certification <MaterialIcon name="arrow_forward" />
+                </Link>
+              </div>
+
+              <div className="relative hidden lg:block">
+                <div className="bg-white/10 backdrop-blur-xl rounded-[3.5rem] p-10 border border-white/10 space-y-8 rotate-3 shadow-2xl">
+                   <div className="flex items-center gap-6">
+                      <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
+                        <MaterialIcon name="verified" className="text-white text-3xl" fill />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-1 leading-none">Marketplace Status</p>
+                        <p className="text-2xl font-black italic tracking-tight">Verified Elite</p>
+                      </div>
+                   </div>
+                   <div className="h-px bg-white/10 w-full"></div>
+                   <div className="space-y-4">
+                      <p className="text-xs font-bold text-blue-100/60 leading-relaxed italic">
+                        "Professionals who complete the Standards Program see a 300% increase in job invitations and higher hourly rates."
+                      </p>
+                      <div className="flex -space-x-3 pt-2">
+                        {[1,2,3,4].map(i => (
+                          <div key={i} className="w-10 h-10 rounded-full border-2 border-primary bg-slate-200 overflow-hidden">
+                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=p${i}`} alt="Elite" />
+                          </div>
+                        ))}
+                        <div className="w-10 h-10 rounded-full border-2 border-primary bg-primary-container flex items-center justify-center text-[10px] font-black italic">+1.2k</div>
+                      </div>
+                   </div>
                 </div>
               </div>
             </div>
           </div>
-          <div className="absolute -top-16 -right-16 w-80 h-80 bg-secondary-fixed opacity-10 rounded-full blur-[100px] -z-10 animate-pulse" />
-          <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-tertiary-fixed opacity-30 rounded-full blur-[100px] -z-10" />
-        </div>
-      </div>
+        </section>
 
-      {/* Bento Grid: Why Verification Matters */}
-      <section className="space-y-12 pb-24 border-t border-outline-variant/10 pt-24">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div>
-            <h2 className="text-4xl font-headline font-black text-primary italic tracking-tighter">Why Verification Matters</h2>
-            <p className="text-on-surface-variant font-medium italic opacity-60 mt-2">Joining our elite ecosystem of trusted caregivers.</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="md:col-span-2 bg-white p-12 rounded-[3.5rem] shadow-2xl shadow-primary/5 flex flex-col md:flex-row gap-12 items-center border border-outline-variant/10 group">
-            <div className="flex-1 space-y-6">
-              <div className="h-16 w-16 bg-primary/5 rounded-2xl flex items-center justify-center">
-                <MaterialIcon name="trending_up" className="text-primary text-3xl" fill />
-              </div>
-              <h3 className="text-3xl font-headline font-black text-primary italic tracking-tight leading-none">Premium Earnings</h3>
-              <p className="text-on-surface-variant font-medium italic leading-relaxed opacity-70">
-                Verified professionals earn up to 40% more. Families prioritize safe vetting and pay a luxury premium for peace of mind.
-              </p>
+        {/* Benefits Cards */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-surface-container-low p-12 rounded-[3.5rem] border border-outline-variant/10 space-y-6 group">
+            <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 transition-transform group-hover:scale-110">
+              <MaterialIcon name="trending_up" className="text-3xl" fill />
             </div>
-            <div className="w-full md:w-1/3 aspect-square bg-surface-container-low rounded-[2.5rem] overflow-hidden grayscale group-hover:grayscale-0 transition-all duration-1000">
-              <img src="https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=800" alt="Success" className="w-full h-full object-cover" />
-            </div>
+            <h3 className="text-3xl font-headline font-black text-primary italic tracking-tight leading-none">Premium Earnings</h3>
+            <p className="text-on-surface-variant font-medium italic leading-relaxed opacity-70">
+              Verified professionals earn up to 40% more. Families prioritize safe vetting and pay a luxury premium for peace of mind.
+            </p>
           </div>
-          <div className="bg-primary p-12 rounded-[3.5rem] text-white flex flex-col justify-between shadow-2xl shadow-primary/20 relative overflow-hidden group">
-            <MaterialIcon name="star" className="text-5xl text-secondary group-hover:rotate-45 transition-transform duration-700" fill />
-            <div className="mt-12 relative z-10">
-              <h3 className="text-2xl font-headline font-black italic tracking-tight mb-4">Priority Ranking</h3>
-              <p className="text-blue-100/40 text-sm font-medium italic leading-relaxed">
-                Your profile will automatically surface at the top of family searches after approval.
-              </p>
+
+          <div className="bg-surface-container-low p-12 rounded-[3.5rem] border border-outline-variant/10 space-y-6 group">
+            <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 transition-transform group-hover:scale-110">
+              <MaterialIcon name="star" className="text-3xl" fill />
             </div>
+            <h3 className="text-3xl font-headline font-black text-primary italic tracking-tight leading-none">Priority Ranking</h3>
+            <p className="text-on-surface-variant font-medium italic leading-relaxed opacity-70">
+              Your profile will automatically surface at the top of family searches after approval, ensuring you get seen first.
+            </p>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }
+
 
 // REJECTED STATE
 export function RejectedState({ user, verification }: StatusScreenProps) {
@@ -325,10 +368,7 @@ export function RejectedState({ user, verification }: StatusScreenProps) {
             </div>
           </div>
           <div className="mt-16 flex flex-wrap gap-5">
-            <Link href="/dashboard/nanny/verification" className="px-10 py-5 bg-gradient-to-br from-primary to-primary-container text-white font-black uppercase tracking-widest text-[10px] rounded-[1.5rem] shadow-2xl shadow-primary/20 hover:scale-[1.05] active:scale-95 transition-all flex items-center gap-3 italic">
-              Fix and Resubmit
-              <MaterialIcon name="refresh" />
-            </Link>
+            <ResubmitButton />
             <Link href="/dashboard/messages?tab=support" className="px-10 py-5 bg-surface-container-low text-primary font-black uppercase tracking-widest text-[10px] rounded-[1.5rem] hover:bg-surface-dim transition-all italic active:scale-95 shadow-sm">
               Speak with Concierge
             </Link>
@@ -391,5 +431,51 @@ export function RejectedState({ user, verification }: StatusScreenProps) {
         </div>
       </section>
     </div>
+  );
+}
+
+function ResubmitButton() {
+  const [isResetting, setIsResetting] = useState(false);
+
+  return (
+    <button 
+      onClick={async () => {
+        setIsResetting(true);
+        try {
+          await revokeVerification();
+        } catch (e) {
+          setIsResetting(false);
+          alert("Failed to reset. Please try again.");
+        }
+      }}
+      disabled={isResetting}
+      className="px-10 py-5 bg-gradient-to-br from-primary to-primary-container text-white font-black uppercase tracking-widest text-[10px] rounded-[1.5rem] shadow-2xl shadow-primary/20 hover:scale-[1.05] active:scale-95 transition-all flex items-center gap-3 italic disabled:opacity-50"
+    >
+      {isResetting ? <Loader2 size={14} className="animate-spin" /> : <MaterialIcon name="refresh" />}
+      Fix and Resubmit
+    </button>
+  );
+}
+
+function RevokeButton() {
+  const [isRevoking, setIsRevoking] = useState(false);
+
+  return (
+    <button 
+      onClick={async () => {
+        setIsRevoking(true);
+        try {
+          await revokeVerification();
+        } catch (e) {
+          setIsRevoking(false);
+          alert("Failed to revoke. Please try again.");
+        }
+      }}
+      disabled={isRevoking}
+      className="inline-flex items-center gap-3 px-8 py-4 bg-white border border-outline-variant/20 rounded-[1.25rem] text-primary font-black uppercase text-[10px] tracking-widest hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+    >
+      {isRevoking ? <Loader2 size={14} className="animate-spin" /> : <MaterialIcon name="undo" className="text-sm" />}
+      Revoke & Edit
+    </button>
   );
 }

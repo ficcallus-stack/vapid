@@ -11,7 +11,7 @@ interface ExpertiseStepProps {
 
 export function ExpertiseStep({ profile, handleUpdate, handleArrayToggle }: ExpertiseStepProps) {
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
+    <div className="space-y-10 pb-10">
       <div className="bg-surface-container-lowest rounded-[2rem] p-8 md:p-10 shadow-sm border border-outline-variant/10">
         <h3 className="font-headline text-3xl font-black mb-8 text-primary italic tracking-tighter">Professional Pedigree</h3>
         <div className="space-y-12">

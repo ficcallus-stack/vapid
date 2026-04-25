@@ -10,6 +10,7 @@ import { createBookingSchema } from "@/lib/validations";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { PaymentService } from "@/lib/payments/service";
+import { isInstantBooking, calculateInstantRate } from "@/lib/pricing-utils";
 
 /**
  * Step 1 Action: Creates a draft booking to persist schedule refinement.
@@ -59,7 +60,7 @@ export async function initBookingAction(data: {
   if (!caregiverProfile) throw new Error("Caregiver profile not found.");
 
   const hourlyRate = parseFloat(caregiverProfile.hourlyRate || "35");
-  const weeklyRate = parseFloat(caregiverProfile.weeklyRate || "1200");
+  const weeklyRate = parseFloat(caregiverProfile.weeklyRate || (hourlyRate * 40 * 0.85).toString());
   const EXTRA_CHILD_HOURLY = 5;
   const EXTRA_CHILD_WEEKLY = 150;
 
@@ -69,10 +70,13 @@ export async function initBookingAction(data: {
   // 1. Validate Child Count consistency
   const activeChildCount = Math.max(data.childCount, data.selectedChildIds.length);
   const extraChildren = Math.max(0, activeChildCount - 1);
+  const isInstant = isInstantBooking(data.startDate, data.startTime || "");
 
   if (data.hiringMode === "retainer") {
-    // Retainer calculation (Standard 40h week)
-    const baseWeekly = weeklyRate * 100;
+    // Instant Premium Logic for Retainer
+    const effectiveWeeklyRate = isInstant ? calculateInstantRate(weeklyRate) : weeklyRate;
+
+    const baseWeekly = effectiveWeeklyRate * 100;
     const extraWeekly = extraChildren * EXTRA_CHILD_WEEKLY * 100;
     subtotalCents = baseWeekly + extraWeekly;
     totalHours = 40;
@@ -86,7 +90,11 @@ export async function initBookingAction(data: {
     }
 
     totalHours = selectedSlots.length * 4; 
-    const baseHourly = Math.round(totalHours * hourlyRate * 100);
+    
+    // Instant Premium Logic
+    const effectiveHourlyRate = isInstant ? calculateInstantRate(hourlyRate) : hourlyRate;
+
+    const baseHourly = Math.round(totalHours * effectiveHourlyRate * 100);
     const extraHourly = Math.round(totalHours * extraChildren * EXTRA_CHILD_HOURLY * 100);
     subtotalCents = baseHourly + extraHourly;
   }
@@ -111,6 +119,7 @@ export async function initBookingAction(data: {
     phoneNumber: data.phoneNumber,
     emergencyContactName: data.emergencyContactName,
     emergencyContactPhone: data.emergencyContactPhone,
+    isInstant,
     status: "pending",
   }).returning();
 

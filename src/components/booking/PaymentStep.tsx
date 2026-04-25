@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { StripeProvider } from "@/components/StripeProvider";
 import { EmbeddedCheckout } from "./EmbeddedCheckout";
+import { isInstantBooking, calculateInstantRate } from "@/lib/pricing-utils";
 
 interface PaymentStepProps {
   booking: any;
@@ -29,7 +30,13 @@ export function PaymentStep({ booking, nanny, savedCards }: PaymentStepProps) {
   const extraChildren = Math.max(0, booking.childCount - 1);
   
   const totalHours = isRetainer ? 40 : (Object.values(booking.refinedSchedule || {}).filter(Boolean).length * 4);
-  const baseCare = isRetainer ? weeklyRate : (totalHours * hourlyRate);
+  
+  // Instant Premium Logic
+  const isInstant = booking.isInstant;
+  const activeHourlyRate = isInstant ? calculateInstantRate(hourlyRate) : hourlyRate;
+  const activeWeeklyRate = isInstant ? calculateInstantRate(weeklyRate) : weeklyRate;
+
+  const baseCare = isRetainer ? activeWeeklyRate : (totalHours * activeHourlyRate);
   const extraChildPremium = extraChildren * (isRetainer ? EXTRA_CHILD_WEEKLY : (totalHours * EXTRA_CHILD_HOURLY));
   
   const subtotal = baseCare + extraChildPremium;
@@ -186,10 +193,16 @@ export function PaymentStep({ booking, nanny, savedCards }: PaymentStepProps) {
           </div>
 
           <div className="space-y-5 mb-10">
-            <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-widest">
-              <span className="text-on-surface-variant font-medium">Base Care Rate</span>
-              <span className="text-primary">${baseCare.toFixed(2)}</span>
-            </div>
+             <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-widest">
+               <span className="text-on-surface-variant font-medium">Base Care Rate</span>
+               <span className="text-primary">${baseCare.toFixed(2)}</span>
+             </div>
+             {isInstant && (
+                <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-widest text-rose-600 animate-pulse">
+                  <span className="font-medium italic">Instant Priority (20% Premium)</span>
+                  <span>Applied</span>
+                </div>
+             )}
             {extraChildPremium > 0 && (
                <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-widest text-secondary">
                  <span className="font-medium">Additional Child (x{extraChildren})</span>

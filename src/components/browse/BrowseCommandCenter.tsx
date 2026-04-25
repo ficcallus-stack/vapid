@@ -416,7 +416,18 @@ export default function BrowseCommandCenter({
             )}
           >
             <MaterialIcon name="calendar_today" className="text-[17px]" /> 
-            Always Available
+            Full-Time Ready
+          </button>
+
+          <button 
+            onClick={() => { const next = !availableNow; setAvailableNow(next); updateFilters({ available: next ? "true" : null }); }}
+            className={cn(
+              "shrink-0 flex items-center gap-2.5 px-6 py-3 rounded-full text-[11px] font-black uppercase transition-all",
+              availableNow ? "bg-error text-white" : "bg-white text-primary border border-primary/5 hover:bg-[#f4f3f3]"
+            )}
+          >
+            <div className={cn("w-1.5 h-1.5 rounded-full", availableNow ? "bg-white animate-ping" : "bg-error")} />
+            {"Ready < 4h"}
           </button>
         </div>
 

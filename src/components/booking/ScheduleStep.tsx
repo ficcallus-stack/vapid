@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
 import { useToast } from "@/components/Toast";
 import MapboxAutocomplete from "@/components/MapboxAutocomplete";
+import { calculateInstantRate, isInstantBooking } from "@/lib/pricing-utils";
 
 interface ChildProfile {
   id: string;
@@ -50,7 +51,7 @@ export function ScheduleStep({ user, nanny, childrenList }: ScheduleStepProps) {
   // Configuration State
   const [hiringMode, setHiringMode] = useState<"hourly" | "retainer">("hourly");
   const [isDetailed, setIsDetailed] = useState(false);
-  const [startDate, setStartDate] = useState(format(addDays(new Date(), 1), "yyyy-MM-dd"));
+  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [startTime, setStartTime] = useState("09:00");
   
   // Custom Pulse Grid: dayIndex_intervalId (e.g. "1_2" = Monday Morning)
@@ -83,12 +84,16 @@ export function ScheduleStep({ user, nanny, childrenList }: ScheduleStepProps) {
     const STRIPE_FEE_RATE = 0.029;
     const KINDRED_FEE_RATE = 0.046;
 
+    const isInstant = isInstantBooking(startDate, startTime);
+    const activeHourlyRate = isInstant ? calculateInstantRate(hourlyRate) : hourlyRate;
+
     if (hiringMode === "retainer") {
-      subtotalValue = weeklyRate + (extraChildren * EXTRA_CHILD_WEEKLY);
+      const activeWeeklyRate = isInstant ? calculateInstantRate(weeklyRate) : weeklyRate;
+      subtotalValue = activeWeeklyRate + (extraChildren * EXTRA_CHILD_WEEKLY);
     } else {
       const selectedChunksCount = Object.values(pulseGrid).filter(Boolean).length;
       const hours = selectedChunksCount * 4;
-      subtotalValue = (hours * hourlyRate) + (selectedChunksCount * extraChildren * 4 * EXTRA_CHILD_HOURLY);
+      subtotalValue = (hours * activeHourlyRate) + (selectedChunksCount * extraChildren * 4 * EXTRA_CHILD_HOURLY);
     }
 
     const stripeFee = subtotalValue * STRIPE_FEE_RATE;
@@ -101,11 +106,12 @@ export function ScheduleStep({ user, nanny, childrenList }: ScheduleStepProps) {
       kindredFee,
       total,
       extraChildPremium: extraChildren * (hiringMode === "hourly" ? EXTRA_CHILD_HOURLY * (Object.values(pulseGrid).filter(Boolean).length * 4) : EXTRA_CHILD_WEEKLY),
-      totalHours: hiringMode === "hourly" ? (Object.values(pulseGrid).filter(Boolean).length * 4) : 40 
+      totalHours: hiringMode === "hourly" ? (Object.values(pulseGrid).filter(Boolean).length * 4) : 40,
+      isInstant 
     };
   };
 
-  const { subtotal, stripeFee, kindredFee, total, extraChildPremium, totalHours } = calculateTotal();
+  const { subtotal, stripeFee, kindredFee, total, extraChildPremium, totalHours, isInstant } = calculateTotal();
 
   const handleChildToggle = (id: string) => {
     setSelectedChildIds(prev => 
@@ -272,8 +278,13 @@ export function ScheduleStep({ user, nanny, childrenList }: ScheduleStepProps) {
               <h3 className="text-2xl font-headline font-black italic tracking-tighter text-primary">Hourly Care</h3>
               <p className="text-[11px] text-slate-500 mt-3 leading-relaxed font-medium">Flexible support for occasional needs, date nights, or emergency shifts.</p>
               <div className="mt-8 flex items-baseline gap-1">
-                <span className="text-4xl font-headline font-black italic text-primary">${nanny.hourlyRate}</span>
+                <span className="text-4xl font-headline font-black italic text-primary">
+                  ${isInstant ? calculateInstantRate(nanny.hourlyRate) : nanny.hourlyRate}
+                </span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">/hr</span>
+                {isInstant && (
+                  <span className="text-[8px] font-black uppercase text-error ml-2 bg-error/10 px-2 py-0.5 rounded-full">+20% Instant Premium</span>
+                )}
               </div>
             </button>
 
@@ -303,8 +314,13 @@ export function ScheduleStep({ user, nanny, childrenList }: ScheduleStepProps) {
               <h3 className="text-2xl font-headline font-black italic tracking-tighter text-primary">Weekly Retainer</h3>
               <p className="text-[11px] text-slate-500 mt-3 leading-relaxed font-medium">Consistent premium care with guaranteed availability for full-time needs.</p>
               <div className="mt-8 flex items-baseline gap-1">
-                <span className="text-4xl font-headline font-black italic text-primary">${nanny.weeklyRate}</span>
+                <span className="text-4xl font-headline font-black italic text-primary">
+                  ${isInstant ? calculateInstantRate(nanny.weeklyRate) : nanny.weeklyRate}
+                </span>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">/wk</span>
+                {isInstant && (
+                  <span className="text-[8px] font-black uppercase text-error ml-2 bg-error/10 px-2 py-0.5 rounded-full">+20% Instant Premium</span>
+                )}
               </div>
             </button>
           </div>
@@ -654,13 +670,19 @@ export function ScheduleStep({ user, nanny, childrenList }: ScheduleStepProps) {
              <div className="space-y-6">
                 <div className="space-y-3">
                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <span>Care Service {hiringMode === 'hourly' ? `(${totalHours} hrs)` : '(Weekly)'}</span>
+                      <span>Care Service {hiringMode === 'hourly' ? `(${totalHours} hrs)` : '(Weekly)'} {isInstant && "(20% Premium)"}</span>
                       <span className="text-primary">${subtotal.toFixed(2)}</span>
                    </div>
                    {totalChildren > 1 && (
                       <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-secondary">
                         <span>Additional Child (x{totalChildren - 1})</span>
                         <span>+${extraChildPremium.toFixed(2)}</span>
+                      </div>
+                   )}
+                   {isInstant && (
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-error">
+                        <span>Instant Care Premium (20%)</span>
+                        <span>Applied</span>
                       </div>
                    )}
                    <div className="h-px bg-slate-100 my-4" />

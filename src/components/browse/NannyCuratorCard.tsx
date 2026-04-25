@@ -27,7 +27,12 @@ export function NannyCuratorCard({ nanny }: NannyCuratorCardProps) {
   
   // Weekly Retainer as primary focus
   const displayWeekly = nanny.weeklyRate || "1,200";
-  const displayHourly = nanny.hourlyRate || "35";
+  let displayHourly = nanny.hourlyRate || "35";
+
+  if (isInstant) {
+    const { calculateInstantRate } = require("@/lib/pricing-utils");
+    displayHourly = calculateInstantRate(displayHourly);
+  }
 
   return (
     <div className="nanny-card group relative bg-[#f4f3f3] p-4 rounded-xl transition-all duration-500 hover:bg-[#eeeeee]">
@@ -51,7 +56,7 @@ export function NannyCuratorCard({ nanny }: NannyCuratorCardProps) {
           {alwaysAvailable ? (
             <div className="relative bg-emerald-500/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
               <MaterialIcon name="verified" className="text-[10px]" />
-              Always Free
+              Full-Time Ready
             </div>
           ) : (
             <div className={cn(
@@ -59,7 +64,7 @@ export function NannyCuratorCard({ nanny }: NannyCuratorCardProps) {
               isExpired ? "bg-rose-500/90 text-white" : "bg-white/90 text-primary"
             )}>
               <MaterialIcon name={isExpired ? "event_busy" : "event_available"} className="text-[10px]" />
-              {isExpired ? "Schedule Expired" : "Managed Schedule"}
+              {isExpired ? "Schedule Expired" : "Ad-Hoc / Part-Time"}
             </div>
           )}
         </div>

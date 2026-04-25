@@ -432,6 +432,16 @@ export function referenceRequestTemplate(nannyName: string, employerName: string
         Could you spare 60 seconds to provide a quick verification? Your feedback is crucial for maintaining the safety and quality of our community.
       </p>
       ${btn("Provide Reference", verifyUrl)}
+      
+      <div style="margin-top:32px;padding:20px;background-color:#f9f9f9;border-radius:12px;border:1px solid #eeeeee;">
+         <p style="margin:0;font-size:12px;color:${BRAND.textSecondary};line-height:1.6;">
+           <strong>Privacy & Coordination:</strong> This request is part of our standard trust and safety protocol. Your feedback remains confidential and is used solely to verify the professional history of ${nannyName}.
+         </p>
+         <p style="margin:8px 0 0;font-size:11px;color:#999;line-height:1.6;">
+           Please do not reply to this automated message. If you have questions, please visit our website's help center.
+         </p>
+      </div>
+
       <p style="margin:32px 0 0;font-size:13px;color:#999;line-height:1.6;font-style:italic;">
         KindredCare US uses advanced trust-scoring to verify every caregiver. Your response is confidential and handled with the highest security standards.
       </p>
@@ -440,5 +450,52 @@ export function referenceRequestTemplate(nannyName: string, employerName: string
 }
 
 export function referenceRequestText(nannyName: string, employerName: string, verifyUrl: string) {
-    return `Hello ${employerName},\n\n${nannyName} is applying to join KindredCare US and has listed you as a reference.\n\nPlease provide your feedback here: ${verifyUrl}\n\nThank you for helping us maintain a safe community.\n\nKindredCare US`;
+    return `Hello ${employerName},\n\n${nannyName} is applying to join KindredCare US and has listed you as a reference.\n\nPlease provide your feedback here: ${verifyUrl}\n\nImportant: If you need to discuss this request, please email kindredcareus@gmail.com directly. Do not reply to this automated message.\n\nThank you for helping us maintain a safe community.\n\nKindredCare US`;
+}
+
+// ─── 11. Verification Status ───
+
+export function verificationStatusTemplate(name: string, status: "verified" | "rejected", notes?: string) {
+  const isVerified = status === "verified";
+  return layout(`
+    <td>
+      <div style="width:64px;height:64px;background-color:${isVerified ? "#e8f5e9" : "#fff3e0"};border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:24px;">
+        <span style="font-size:28px;">${isVerified ? "🛡️" : "⚠️"}</span>
+      </div>
+      <h1 style="margin:0 0 12px;font-size:28px;font-weight:800;color:${BRAND.color};line-height:1.2;">
+        ${isVerified ? "Dossier Verified!" : "Action Required"}
+      </h1>
+      <p style="margin:0 0 24px;font-size:16px;color:${BRAND.textSecondary};line-height:1.7;">
+        Hi ${name}, your professional verification dossier has been 
+        <strong style="color:${isVerified ? "#2e7d32" : BRAND.secondary};">${isVerified ? "approved" : "flagged for review"}</strong>.
+      </p>
+      
+      ${!isVerified && notes ? `
+        <div style="background-color:#fffdf5;border-radius:12px;padding:20px;border-left:4px solid ${BRAND.accent};margin-bottom:24px;">
+          <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${BRAND.textPrimary};text-transform:uppercase;letter-spacing:1px;">Moderator Notes:</p>
+          <p style="margin:0;font-size:14px;color:${BRAND.textSecondary};line-height:1.6;font-style:italic;">
+            "${notes}"
+          </p>
+        </div>
+      ` : ""}
+
+      <p style="margin:0 0 24px;font-size:14px;color:${BRAND.textSecondary};line-height:1.6;">
+        ${isVerified 
+          ? "You are now an officially verified caregiver in the KindredCare ecosystem. Your profile will now display the Trust & Safety badge, giving families total peace of mind."
+          : "Our team noticed a few details that need your attention before we can finalize your verification. Please log in to your dashboard to address the notes above."
+        }
+      </p>
+
+      ${btn(isVerified ? "Go to Dashboard" : "Fix My Dossier", `${BRAND.url}/dashboard/nanny/verification`)}
+      
+      <p style="margin:32px 0 0;font-size:12px;color:#999;text-align:center;">
+        KindredCare US Trust & Safety Team
+      </p>
+    </td>
+  `);
+}
+
+export function verificationStatusText(name: string, status: "verified" | "rejected", notes?: string) {
+  const isVerified = status === "verified";
+  return `Hi ${name},\n\nYour verification dossier was ${isVerified ? "APPROVED" : "REJECTED"}.\n\n${!isVerified && notes ? `Moderator Notes: "${notes}"\n\n` : ""}Log in to your dashboard to see next steps: ${BRAND.url}/dashboard/nanny/verification\n\n— KindredCare US Trust & Safety`;
 }

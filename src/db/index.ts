@@ -16,4 +16,14 @@ const url = process.env.DATABASE_URL.startsWith("DATABASE_URL=")
 
 // WebSocket-based pool for transaction support
 const pool = new Pool({ connectionString: url });
-export const db = drizzle(pool, { schema });
+
+const client = drizzle(pool, { schema });
+export type DbClient = typeof client;
+
+const globalForDb = globalThis as unknown as {
+  db: DbClient | undefined;
+};
+
+export const db = globalForDb.db ?? client;
+
+if (process.env.NODE_ENV !== "production") globalForDb.db = db;

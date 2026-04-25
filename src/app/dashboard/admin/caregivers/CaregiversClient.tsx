@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { MaterialIcon } from "@/components/MaterialIcon";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/Toast";
-import { updateUserRole } from "../actions";
+import { updateUserRole, resendReferenceEmail } from "../actions";
 import { useRouter } from "next/navigation";
 
 interface User {
@@ -13,12 +13,14 @@ interface User {
   fullName: string;
   role: string;
   emailVerified: boolean;
-  createdAt: string;
+  createdAt: Date;
+  verification?: any;
+  references?: any[];
 }
 
 interface CaregiversClientProps {
   initialData: {
-    users: any[];
+    users: User[];
     total: number;
     page: number;
     totalPages: number;
@@ -32,8 +34,28 @@ export default function CaregiversClient({ initialData, search: initialSearch, r
   const { showToast } = useToast();
   const router = useRouter();
   const [updating, setUpdating] = useState<string | null>(null);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [resending, setResending] = useState<string | null>(null);
+
+  const handleResend = async (refId: string) => {
+    setResending(refId);
+    try {
+      const res = await resendReferenceEmail(refId);
+      if (res.success) {
+        showToast("Reference request re-queued for delivery.", "success");
+      } else {
+        showToast("Relay rejected the resend request.", "error");
+      }
+      router.refresh();
+    } catch (e: any) {
+      showToast(e.message || "Resend failed", "error");
+    } finally {
+      setResending(null);
+    }
+  };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
+// ... (rest of the handleRoleChange logic stays same)
     if (!confirm(`Confirm role elevation/demotion to "${newRole}"?`)) return;
     setUpdating(userId);
     try {
@@ -118,7 +140,8 @@ export default function CaregiversClient({ initialData, search: initialSearch, r
           </thead>
           <tbody className="divide-y divide-slate-50">
             {initialData.users.map((u) => (
-              <tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
+              <Fragment key={u.id}>
+              <tr className="hover:bg-slate-50/50 transition-colors group">
                 <td className="px-8 py-6">
                   <div className="flex items-center gap-4">
                     <img 
@@ -144,15 +167,28 @@ export default function CaregiversClient({ initialData, search: initialSearch, r
                 </td>
                 <td className="px-8 py-6">
                   <div className="flex items-center gap-2">
-                    <MaterialIcon name={u.emailVerified ? "verified" : "info"} className={cn("text-lg", u.emailVerified ? "text-emerald-500" : "text-slate-300")} fill={u.emailVerified} />
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{u.emailVerified ? "Trust Verified" : "Verification Pen."}</span>
+                    <MaterialIcon name={u.verification?.status === "verified" ? "verified" : u.verification?.status === "pending" ? "pending_actions" : "info"} className={cn("text-lg", u.verification?.status === "verified" ? "text-emerald-500" : u.verification?.status === "pending" ? "text-amber-500" : "text-slate-300")} fill={u.verification?.status === "verified"} />
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      {u.verification?.status || "none"}
+                    </span>
                   </div>
                 </td>
                 <td className="px-8 py-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                   {new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </td>
                 <td className="px-8 py-6 text-right">
-                  <div className="flex justify-end items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex justify-end items-center gap-3">
+                    {u.role === "caregiver" && (
+                      <button 
+                        onClick={() => setExpandedRow(expandedRow === u.id ? null : u.id)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                          expandedRow === u.id ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-200 hover:border-primary/40"
+                        )}
+                      >
+                        Vetting Dossier
+                      </button>
+                    )}
                     <select
                       value={u.role}
                       disabled={updating === u.id || u.role === "admin"}
@@ -163,12 +199,76 @@ export default function CaregiversClient({ initialData, search: initialSearch, r
                       <option value="caregiver">Make Caregiver</option>
                       <option value="moderator">Make Moderator</option>
                     </select>
-                    <button className="p-2 text-slate-400 hover:text-primary transition-all">
-                      <MaterialIcon name="more_vert" className="text-xl" />
-                    </button>
                   </div>
                 </td>
               </tr>
+              {expandedRow === u.id && u.role === "caregiver" && (
+                <tr className="bg-slate-50/80">
+                  <td colSpan={5} className="px-12 py-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                      <div>
+                        <h5 className="text-[10px] font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <MaterialIcon name="how_to_reg" className="text-sm" />
+                          Verification Assets
+                        </h5>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center p-4 bg-white rounded-2xl border border-slate-100">
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identity Photos</span>
+                             <span className="text-[10px] font-black text-primary uppercase tracking-widest">{u.verification?.idFrontUrl ? "COLLECTED" : "MISSING"}</span>
+                          </div>
+                          <div className="flex justify-between items-center p-4 bg-white rounded-2xl border border-slate-100">
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SSN / Background Auth</span>
+                             <span className="text-[10px] font-black text-primary uppercase tracking-widest">{u.verification?.backgroundAuth ? "AUTHORIZED" : "PENDING"}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <h5 className="text-[10px] font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+                          <MaterialIcon name="contact_mail" className="text-sm" />
+                          Reference Automations
+                        </h5>
+                        <div className="space-y-3">
+                          {u.references?.length === 0 ? (
+                            <p className="text-[10px] italic text-slate-400 font-bold uppercase tracking-widest">No references submitted yet.</p>
+                          ) : u.references?.map((ref) => (
+                            <div key={ref.id} className="p-5 bg-white rounded-2xl border border-slate-100 flex justify-between items-center group/ref shadow-sm">
+                              <div>
+                                <p className="text-[11px] font-black text-primary italic">{ref.employerName}</p>
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">{ref.employerEmail}</p>
+                                <div className="flex items-center gap-2 mt-3">
+                                  <div className={cn(
+                                    "w-2 h-2 rounded-full animate-pulse",
+                                    ref.emailStatus === "sent" ? "bg-emerald-400" : ref.emailStatus === "failed" ? "bg-red-400" : "bg-amber-400"
+                                  )} />
+                                  <span className={cn(
+                                    "text-[9px] font-black uppercase tracking-widest",
+                                    ref.emailStatus === "sent" ? "text-emerald-600" : ref.emailStatus === "failed" ? "text-red-600" : "text-amber-600"
+                                  )}>
+                                    Email {ref.emailStatus}
+                                  </span>
+                                  {ref.lastEmailSentAt && (
+                                    <span className="text-[9px] text-slate-300 font-bold uppercase tracking-widest ml-2">
+                                      {new Date(ref.lastEmailSentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button 
+                                onClick={() => handleResend(ref.id)}
+                                disabled={resending === ref.id}
+                                className="px-4 py-2 bg-slate-50 text-primary rounded-xl text-[9px] font-black uppercase tracking-widest border border-slate-100 hover:bg-primary hover:text-white transition-all disabled:opacity-30"
+                              >
+                                {resending === ref.id ? "Sending..." : "Resend"}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>

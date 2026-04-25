@@ -17,7 +17,7 @@ export function LogisticsStep({ profile, handleUpdate, handleArrayToggle }: Logi
   const isSelected = (field: string, item: string) => (profile[field] || []).includes(item);
 
   return (
-    <div className="space-y-12 animate-in fade-in slide-in-from-right-4 duration-500">
+    <div className="space-y-10 pb-10">
       {/* ── Section 1: Mobility & Reach ────────────────────────────── */}
       <section className="bg-surface-container-low/30 rounded-[3.5rem] p-8 md:p-12 border border-outline-variant/10 shadow-sm space-y-12">
         <header className="max-w-xl">

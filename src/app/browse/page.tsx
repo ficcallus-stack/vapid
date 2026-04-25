@@ -76,9 +76,11 @@ export default async function BrowseNannies({ searchParams }: { searchParams: Pr
       )
     ),
     
-    rateType === "hourly" 
-      ? (maxRateFilter < 150 ? lte(nannyProfiles.hourlyRate, maxRateFilter.toString()) : undefined)
-      : (maxRateFilter < 5000 ? lte(nannyProfiles.weeklyRate, maxRateFilter.toString()) : undefined),
+    params.rate 
+      ? (rateType === "hourly" 
+          ? sql`CAST(${nannyProfiles.hourlyRate} AS NUMERIC) <= ${maxRateFilter}`
+          : sql`CAST(${nannyProfiles.weeklyRate} AS NUMERIC) <= ${maxRateFilter}`)
+      : undefined,
     
     // Hybrid Geo-Text Match
     (mode === "local" && locationLabel)
@@ -88,6 +90,10 @@ export default async function BrowseNannies({ searchParams }: { searchParams: Pr
       : undefined,
       
     alwaysAvailableOnly ? sql`${nannyProfiles.availability}->>'alwaysAvailable' = 'true'` : undefined,
+    availableNow ? and(
+      sql`${nannyProfiles.availability}->>'instantAvailable' = 'true'`,
+      sql`(${nannyProfiles.availability}->>'instantUntil')::timestamp > NOW()`
+    ) : undefined,
   );
 
   const nanniesQuery = db.select({
@@ -109,9 +115,11 @@ export default async function BrowseNannies({ searchParams }: { searchParams: Pr
   .innerJoin(nannyProfiles, eq(users.id, nannyProfiles.id))
   .where(whereClause)
   .orderBy(
+    // 0. Priority: Real Nannies before Synthetic (Ghost)
+    sql`CASE WHEN ${users.isGhost} THEN 1 ELSE 0 END ASC`,
     // 1. Primary Sort: Weighted Matching Algorithm
     desc(matchScore),
-    // 2. Secondary Sort: "Always Available" status
+    // 2. Secondary Sort: "Full-Time Ready" status
     desc(sql`(${nannyProfiles.availability}->>'alwaysAvailable')::boolean`),
     // 3. Fallback to distance
     mode === "local" && distanceSql ? sql`distance ASC` : desc(nannyProfiles.updatedAt)
@@ -152,13 +160,7 @@ export default async function BrowseNannies({ searchParams }: { searchParams: Pr
     }).catch(e => console.error("[ANALYTICS] Sync Fail:", e));
   }
 
-  // 5. Client Filtering for 'Available Now'
-  const filteredNannies = availableNow 
-    ? nannies.filter(n => {
-        const avail = n.availability as any;
-        return avail?.instantAvailable && avail?.instantUntil && new Date(avail.instantUntil) > new Date();
-      })
-    : nannies;
+  const filteredNannies = nannies;
 
   return (
     <div className="bg-[#faf9f9] min-h-screen font-body text-on-surface selection:bg-secondary-container selection:text-on-secondary-container">

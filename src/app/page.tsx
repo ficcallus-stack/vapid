@@ -37,7 +37,7 @@ export default function Home() {
                       <MaterialIcon name="arrow_forward" className="text-sm text-primary group-hover:translate-x-1 transition-transform" />
                     </Link>
                     <div className="w-px h-4 bg-outline-variant/30"></div>
-                    <Link href="/register/nanny" className="text-sm font-black text-secondary uppercase tracking-widest hover:brightness-90 transition-all">
+                    <Link href="/signup?role=caregiver" className="text-sm font-black text-secondary uppercase tracking-widest hover:brightness-90 transition-all">
                       Become a Nanny
                     </Link>
                   </div>
@@ -283,7 +283,7 @@ export default function Home() {
                         I need a Nanny
                         <MaterialIcon name="arrow_forward" />
                      </Link>
-                     <Link href="/register/nanny" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-10 py-5 rounded-2xl font-headline font-black text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-3">
+                     <Link href="/signup?role=caregiver" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-10 py-5 rounded-2xl font-headline font-black text-lg hover:bg-white/20 transition-all flex items-center justify-center gap-3">
                         I am a Nanny
                         <MaterialIcon name="content_paste_go" />
                      </Link>

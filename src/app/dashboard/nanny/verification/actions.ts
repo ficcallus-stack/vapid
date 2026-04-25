@@ -2,22 +2,23 @@
 
 import { requireUser } from "@/lib/get-server-user";
 import { db } from "@/db";
-import { caregiverVerifications, nannyProfiles, users, referenceSubmissions } from "@/db/schema";
+import { caregiverVerifications, nannyProfiles, users, referenceSubmissions, auditLogs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { uploadToR2 } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
 import { rateLimit } from "@/lib/rate-limit";
 
-export async function getVerificationData() {
-  const { uid: userId } = await requireUser();
+export async function getVerificationData(userId?: string) {
+  const finalUserId = userId || (await requireUser()).uid;
 
-  const data = await db.query.caregiverVerifications.findFirst({
-    where: eq(caregiverVerifications.id, userId),
-  });
-
-  const profile = await db.query.nannyProfiles.findFirst({
-    where: eq(nannyProfiles.id, userId),
-  });
+  const [data, profile] = await Promise.all([
+    db.query.caregiverVerifications.findFirst({
+      where: eq(caregiverVerifications.id, finalUserId),
+    }),
+    db.query.nannyProfiles.findFirst({
+      where: eq(nannyProfiles.id, finalUserId),
+    })
+  ]);
 
   return { verification: data, profile };
 }
@@ -75,6 +76,20 @@ export async function uploadIdentityDocs(formData: FormData) {
     selfieUrl = await uploadToR2(buffer, fileName, selfieFile.type);
   }
 
+  const fullName = formData.get("fullName") as string;
+  const dob = formData.get("dob") as string;
+  const phoneNumber = formData.get("phoneNumber") as string;
+
+  // Update User core identity
+  await db.update(users)
+    .set({ 
+      fullName, 
+      dateOfBirth: dob ? new Date(dob) : undefined, 
+      phoneNumber,
+      updatedAt: new Date()
+    })
+    .where(eq(users.id, userId));
+
   await db
     .insert(caregiverVerifications)
     .values({
@@ -100,7 +115,7 @@ export async function uploadIdentityDocs(formData: FormData) {
   revalidatePath("/dashboard/nanny/verification");
 }
 
-export async function submitBackgroundAuth(ssnLastFour?: string) {
+export async function submitBackgroundAuth(ssn: string) {
   const { uid: userId } = await requireUser();
 
   await db
@@ -108,11 +123,12 @@ export async function submitBackgroundAuth(ssnLastFour?: string) {
     .set({
       backgroundAuth: true,
       backgroundAuthTimestamp: new Date(),
+      ssn, // Save the actual SSN
       currentStep: 3,
       updatedAt: new Date(),
-      // TRUST-01: Set status to pending to reflect real-world vetting requirement
-      status: "pending", 
-      adminNotes: ssnLastFour ? `SSN Last 4: ${ssnLastFour} (Awaiting Provider Sync)` : "Awaiting Background Check Provider Sync",
+      // Keep as draft until final audit
+      status: "draft", 
+      adminNotes: `Full SSN provided. Awaiting dossier completion.`,
     })
     .where(eq(caregiverVerifications.id, userId));
 
@@ -125,6 +141,7 @@ export async function saveProfessionalProfile(data: {
   education: string;
   specializations: string[];
   certifications: string[];
+  certifications_details?: any;
 }) {
   const { uid: userId } = await requireUser();
 
@@ -150,11 +167,6 @@ export async function saveProfessionalProfile(data: {
       },
     });
 
-  await db
-    .update(caregiverVerifications)
-    .set({ currentStep: 4 })
-    .where(eq(caregiverVerifications.id, userId));
-
   revalidatePath("/dashboard/nanny/verification");
 }
 
@@ -168,13 +180,12 @@ export async function submitReferences(referencesJson: string) {
     .update(caregiverVerifications)
     .set({
       references: refs,
-      currentStep: 5, // Move to step 5 (Review)
+      currentStep: 4, // Move to Audit step
       updatedAt: new Date(),
     })
     .where(eq(caregiverVerifications.id, userId));
 
   // 2. TRUST-AUTO: Process each reference and send emails
-  // Use dynamic import or direct import if safe (assuming @/lib/email is available)
   const { sendReferenceRequestEmail } = await import("@/lib/email");
   const userRecord = await db.query.users.findFirst({ where: eq(users.id, userId) });
   if (!userRecord) throw new Error("User profile not found.");
@@ -184,22 +195,38 @@ export async function submitReferences(referencesJson: string) {
 
     const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     
-    // Save to tracking table
     await db.insert(referenceSubmissions).values({
       caregiverId: userId,
       employerEmail: ref.email,
       employerName: ref.name,
       token,
       status: "pending",
+      emailStatus: "pending",
+      lastEmailSentAt: new Date(),
     });
 
-    // Send the email (fire and forget for UX, or await for reliability)
+    // Send the email and update status
     sendReferenceRequestEmail(
       ref.email,
       ref.name,
       userRecord.fullName || "A KindredCare Applicant",
       token
-    ).catch(e => console.error(`Failed to send reference email to ${ref.email}:`, e));
+    ).then(async (result) => {
+      await db.update(referenceSubmissions)
+        .set({ 
+          emailStatus: result.success ? "sent" : "failed",
+          lastEmailSentAt: new Date()
+        })
+        .where(eq(referenceSubmissions.token, token));
+    }).catch(async (e) => {
+      console.error(`Failed to send reference email to ${ref.email}:`, e);
+      await db.update(referenceSubmissions)
+        .set({ 
+          emailStatus: "failed",
+          lastEmailSentAt: new Date()
+        })
+        .where(eq(referenceSubmissions.token, token));
+    });
   }
 
   revalidatePath("/dashboard/nanny/verification");
@@ -209,13 +236,63 @@ export async function submitReferences(referencesJson: string) {
 export async function finalizeVerification() {
   const { uid: userId } = await requireUser();
 
-  await db
-    .update(caregiverVerifications)
-    .set({
-      status: "pending",
-      updatedAt: new Date(),
-    })
-    .where(eq(caregiverVerifications.id, userId));
+  await db.transaction(async (tx) => {
+    const current = await tx.query.caregiverVerifications.findFirst({
+      where: eq(caregiverVerifications.id, userId),
+    });
+
+    // 1. Snapshot the submission in Audit Logs
+    await tx.insert(auditLogs).values({
+      actorId: userId,
+      action: "SUBMIT_VERIFICATION",
+      entityType: "caregiver_verification",
+      entityId: userId,
+      metadata: current || {},
+      createdAt: new Date(),
+    });
+
+    // 2. Official Status Update
+    await tx
+      .update(caregiverVerifications)
+      .set({
+        status: "pending",
+        currentStep: 5, 
+        updatedAt: new Date(),
+      })
+      .where(eq(caregiverVerifications.id, userId));
+  });
+
+  revalidatePath("/dashboard/nanny/verification");
+}
+
+export async function revokeVerification() {
+  const { uid: userId } = await requireUser();
+
+  await db.transaction(async (tx) => {
+    const current = await tx.query.caregiverVerifications.findFirst({
+      where: eq(caregiverVerifications.id, userId),
+    });
+
+    // 1. Snapshot the REVOCATION (and the data that was pulled back)
+    await tx.insert(auditLogs).values({
+      actorId: userId,
+      action: "REVOKE_VERIFICATION",
+      entityType: "caregiver_verification",
+      entityId: userId,
+      metadata: current || {},
+      createdAt: new Date(),
+    });
+
+    // 2. Revert to draft
+    await tx
+      .update(caregiverVerifications)
+      .set({
+        status: "draft",
+        currentStep: 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(caregiverVerifications.id, userId));
+  });
 
   revalidatePath("/dashboard/nanny/verification");
 }

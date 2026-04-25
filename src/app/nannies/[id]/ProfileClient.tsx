@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { useState, useRef } from "react";
 import { ChatGuardianModal } from "@/components/chat/ChatGuardianModal";
 import { useToast } from "@/components/Toast";
+import { calculateInstantRate, isInstantBooking } from "@/lib/pricing-utils";
 
 function MediaPlaceholder({ label, icon = "image_not_supported" }: { label: string; icon?: string }) {
   return (
@@ -29,7 +30,7 @@ function AvailabilityStrip({ availability }: { availability: any }) {
     )}>
       <div className={cn("w-2 h-2 rounded-full", alwaysAvailable ? "bg-emerald-500" : "bg-indigo-500")}></div>
       <span className="text-[10px] font-black uppercase tracking-[0.3em] italic">
-        {alwaysAvailable ? "Available for New Placements (Always Free)" : "Managed Weekly Schedule (Book via Hourly)"}
+        {alwaysAvailable ? "Full-Time Ready (Available for New Placements)" : "Ad-Hoc / Part-Time (Managed Weekly Schedule)"}
       </span>
     </div>
   );
@@ -38,6 +39,16 @@ function AvailabilityStrip({ availability }: { availability: any }) {
 export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; reviews: any[] }) {
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isGuardianOpen, setIsGuardianOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+
+  const availability = nanny.availability || {};
+  const isInstant = isInstantBooking(format(new Date(), "yyyy-MM-dd"), format(new Date(), "HH:mm"));
+  
+  const hourly = parseFloat(nanny.hourlyRate || "35");
+  const weekly = parseFloat(nanny.weeklyRate || (hourly * 40 * 0.85).toFixed(0));
+  const savingsPercent = Math.round(((hourly * 40 - weekly) / (hourly * 40)) * 100);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const { showToast } = useToast();
   
@@ -66,12 +77,50 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
         <section className="relative grid grid-cols-1 lg:grid-cols-12 gap-12 mb-20 items-center">
           <div className="lg:col-span-7 relative">
             <div className="absolute -top-6 -left-6 w-32 h-32 bg-secondary-fixed opacity-30 rounded-full blur-3xl"></div>
-            <div className="relative overflow-hidden squircle editorial-shadow aspect-[4/5] md:aspect-[3/2]">
-              <img 
-                alt={`${nanny.name} professional portrait`} 
-                className="w-full h-full object-cover" 
-                src={nanny.profileImageUrl || nanny.photos?.[0]} 
-              />
+            <div className="relative overflow-hidden squircle editorial-shadow aspect-[4/5] md:aspect-[3/2] bg-black group">
+              {nanny.videoUrl ? (
+                <>
+                  <video 
+                    ref={videoRef}
+                    src={nanny.videoUrl} 
+                    className={cn("w-full h-full object-cover transition-all duration-700", !isVideoPlaying && "brightness-75")}
+                    poster={nanny.profileImageUrl || nanny.photos?.[0]}
+                    playsInline
+                    loop
+                    muted={!isVideoPlaying}
+                    onPlaying={() => setIsVideoPlaying(true)}
+                    onPause={() => setIsVideoPlaying(false)}
+                  />
+                  {!isVideoPlaying && (
+                    <div 
+                      className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-[2px] cursor-pointer"
+                      onClick={() => videoRef.current?.play()}
+                    >
+                      <div className="w-20 h-20 bg-white/20 backdrop-blur-2xl rounded-full flex items-center justify-center group-hover:scale-110 transition-all border border-white/20 shadow-2xl">
+                        <MaterialIcon name="play_arrow" className="text-white text-5xl" fill />
+                      </div>
+                      <span className="mt-4 text-[10px] font-black text-white uppercase tracking-[0.3em]">Watch Intro Video</span>
+                    </div>
+                  )}
+                  {isVideoPlaying && (
+                    <button 
+                      onClick={() => {
+                        videoRef.current?.pause();
+                        setIsVideoPlaying(false);
+                      }}
+                      className="absolute bottom-6 right-6 bg-white/20 backdrop-blur-md p-3 rounded-xl border border-white/20 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <MaterialIcon name="pause" />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <img 
+                  alt={`${nanny.name} professional portrait`} 
+                  className="w-full h-full object-cover" 
+                  src={nanny.profileImageUrl || nanny.photos?.[0]} 
+                />
+              )}
             </div>
             <div className="absolute -bottom-8 -right-8 flex flex-col gap-3">
               {nanny.isVerified && (
@@ -101,6 +150,20 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
             <h1 className="text-6xl md:text-7xl font-headline font-extrabold text-primary leading-none mb-6">
               {nanny.name}
             </h1>
+            
+            {isInstant && (
+              <div className="bg-rose-50 border border-rose-100 p-6 rounded-[2.5rem] mb-10 flex items-center gap-6 animate-in slide-in-from-left duration-700 shadow-sm">
+                 <div className="bg-rose-500 text-white w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-rose-200">
+                    <MaterialIcon name="bolt" className="text-3xl" fill />
+                 </div>
+                 <div>
+                    <h4 className="text-rose-700 font-headline font-black italic text-xl tracking-tight leading-none mb-1">Ready to start now</h4>
+                    <p className="text-rose-600/70 text-[11px] font-medium leading-relaxed italic">
+                      {firstName} can arrive within 4 hours. Same-day care is billed at a 20% premium.
+                    </p>
+                 </div>
+              </div>
+            )}
             <div className="flex items-center gap-4 mb-8">
               <div className="flex text-secondary">
                 {[1,2,3,4,5].map(s => (
@@ -121,13 +184,20 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
                 <div className="w-2 h-2 bg-secondary rounded-full animate-pulse group-hover:scale-120 transition-transform" />
                 Message {firstName}
               </button>
-              <Link 
-                href={`/nannies/${nanny.id}/book/schedule`}
-                className="bg-primary text-on-primary font-bold px-6 py-3 rounded-2xl hover:opacity-90 transition-all flex items-center gap-2 text-sm shadow-lg shadow-primary/10"
-              >
-                <MaterialIcon name="event_available" className="text-sm" />
-                Book {firstName}
-              </Link>
+              {nanny.isOccupied ? (
+                <div className="w-full bg-rose-50 border border-rose-100 text-rose-700 font-bold px-6 py-3 rounded-2xl flex items-center gap-3 text-sm shadow-sm">
+                  <MaterialIcon name="event_busy" className="text-rose-500" />
+                  Active Booking with another family
+                </div>
+              ) : (
+                <Link 
+                  href={`/nannies/${nanny.id}/book/schedule`}
+                  className="bg-primary text-on-primary font-bold px-6 py-3 rounded-2xl hover:opacity-90 transition-all flex items-center gap-2 text-sm shadow-lg shadow-primary/10"
+                >
+                  <MaterialIcon name="event_available" className="text-sm" />
+                  Book {firstName}
+                </Link>
+              )}
             </div>
 
             <ChatGuardianModal 
@@ -147,133 +217,22 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
           </div>
         </section>
 
-        {/* Action Gallery & Video Player */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-24">
-          <div className="lg:col-span-8">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {/* Photo 1 (Featured) */}
-              <div className="squircle overflow-hidden aspect-square">
-                {nanny.photos?.[0] ? (
-                  <img className="w-full h-full object-cover" src={nanny.photos[0]} alt="Gallery 1" />
-                ) : (
-                  <MediaPlaceholder label="Photo 1 Missing" />
-                )}
+        {/* Action Gallery & Info Section */}
+        <section className="mb-24">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {(nanny.photos || []).filter((p: string) => !!p).map((photo: string, index: number) => (
+              <div key={index} className="squircle overflow-hidden aspect-square">
+                <img 
+                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" 
+                  src={photo} 
+                  alt={`Gallery ${index + 1}`} 
+                />
               </div>
-              
-              {/* Photo 2 */}
-              <div className="squircle overflow-hidden aspect-square relative">
-                {nanny.photos?.[1] ? (
-                  <img className="w-full h-full object-cover" src={nanny.photos[1]} alt="Gallery 2" />
-                ) : (
-                  <MediaPlaceholder label="Photo 2 Missing" />
-                )}
-              </div>
-
-              {/* Photo 3 (Tall) */}
-              <div className="squircle overflow-hidden aspect-[3/4] md:row-span-2">
-                {nanny.photos?.[2] ? (
-                  <img className="w-full h-full object-cover" src={nanny.photos[2]} alt="Gallery 3" />
-                ) : (
-                  <MediaPlaceholder label="Photo 3 Missing" />
-                )}
-              </div>
-
-              {/* Photo 4 */}
-              <div className="squircle overflow-hidden aspect-square">
-                {nanny.photos?.[3] ? (
-                  <img className="w-full h-full object-cover" src={nanny.photos[3]} alt="Gallery 4" />
-                ) : (
-                  <MediaPlaceholder label="Photo 4 Missing" />
-                )}
-              </div>
-
-              {/* Photo 5 */}
-              <div className="squircle overflow-hidden aspect-square">
-                {nanny.photos?.[4] ? (
-                  <img className="w-full h-full object-cover" src={nanny.photos[4]} alt="Gallery 5" />
-                ) : (
-                  <MediaPlaceholder label="Photo 5 Missing" />
-                )}
-              </div>
-
-              <div className="squircle overflow-hidden aspect-square bg-slate-100 flex items-center justify-center">
-                 <MaterialIcon name="photo_library" className="text-slate-300 text-4xl" />
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-4 flex flex-col justify-end">
-            {nanny.videoUrl ? (
-              <div className="bg-surface-container-low rounded-[2.5rem] p-1 pb-8 group overflow-hidden relative shadow-lg">
-                <div 
-                  className="aspect-video relative overflow-hidden rounded-[2.2rem] cursor-pointer bg-black"
-                  onClick={() => {
-                    setIsVideoPlaying(true);
-                    videoRef.current?.play().catch(err => {
-                       console.error("Playback failed:", err);
-                       showToast("Media playback blocked by browser. Open in new tab or click play again.", "error");
-                    });
-                  }}
-                >
-                  <video 
-                    ref={videoRef}
-                    src={nanny.videoUrl} 
-                    className={cn("w-full h-full object-cover transition-all duration-700", !isVideoPlaying && "brightness-75 opacity-80")}
-                    poster={nanny.photos?.[0] || nanny.profileImageUrl}
-                    controls={isVideoPlaying}
-                    playsInline
-                    preload="metadata"
-                    onWaiting={() => console.log("Video waiting...")}
-                    onPlaying={() => setIsVideoPlaying(true)}
-                    onError={(e) => {
-                       console.error("Video Error:", e);
-                       const video = e.currentTarget;
-                       if (video.error) {
-                          showToast(`Video Load Error: ${video.error.message || "Unsupported source"}`, "error");
-                       }
-                    }}
-                  />
-                  {!isVideoPlaying && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] group-hover:backdrop-blur-0 transition-all">
-                      <div className="w-20 h-20 bg-white/10 backdrop-blur-2xl rounded-full flex items-center justify-center group-hover:scale-110 transition-all border border-white/20 shadow-2xl">
-                        <MaterialIcon name="play_arrow" className="text-white text-5xl" fill />
-                      </div>
-                      <span className="mt-4 text-[10px] font-black text-white uppercase tracking-[0.3em] opacity-0 group-hover:opacity-100 transition-opacity">Watch Intro</span>
-                    </div>
-                  )}
-                  
-                  {/* Debug Fallback for NotSupportedError */}
-                  <div className="absolute top-4 right-4 z-20">
-                     <button 
-                        onClick={(e) => {
-                           e.stopPropagation();
-                           window.open(nanny.videoUrl, '_blank');
-                        }}
-                        className="bg-white/10 backdrop-blur-md p-2 rounded-full border border-white/20 text-white hover:bg-white/20 transition-all"
-                        title="Open source video directly"
-                     >
-                        <MaterialIcon name="open_in_new" className="text-sm" />
-                     </button>
-                  </div>
-                </div>
-                <div className="px-8 mt-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-headline font-bold text-xl text-primary leading-none">Professional Introduction</h3>
-                    <div className="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-                       <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                       Verified HD
-                    </div>
-                  </div>
-                  <p className="text-on-surface-variant text-sm italic font-medium opacity-70">"Experience {firstName}'s child-care methodology in her own words."</p>
-                </div>
-              </div>
-            ) : (
-              <div className="h-full">
-                <MediaPlaceholder label="Video Introduction Missing" icon="videocam_off" />
-              </div>
-            )}
+            ))}
           </div>
         </section>
+
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           {/* Left Column: Bio & Reviews */}
@@ -385,7 +344,15 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
               {/* Booking Module */}
               <div className="bg-primary p-1 rounded-[2.5rem] shadow-2xl overflow-hidden">
                 <div className="bg-white rounded-[2.3rem] p-8">
-                  <h3 className="text-2xl font-headline font-bold text-primary mb-8">Reservations</h3>
+                  <h3 className="text-2xl font-headline font-bold text-primary mb-2">Reservations</h3>
+                  {isInstant && (
+                    <div className="bg-rose-50/50 border border-rose-100/50 p-4 rounded-2xl mb-8 flex items-start gap-3">
+                       <MaterialIcon name="info" className="text-rose-500 text-sm mt-0.5" fill />
+                       <p className="text-[10px] text-rose-700/80 font-bold uppercase tracking-widest leading-relaxed">
+                         Ready within 4h. Same-day rate applies (20% premium).
+                       </p>
+                    </div>
+                  )}
                   <div className="space-y-4 mb-8">
                     <label className="block group cursor-pointer">
                       <input checked className="hidden peer" name="booking_type" type="radio" />
@@ -395,7 +362,14 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
                           <span className="text-sm text-on-surface-variant">Ad-hoc scheduling</span>
                         </div>
                         <div className="text-right">
-                          <span className="block font-extrabold text-primary text-xl">${nanny.hourlyRate}/hr</span>
+                          {isInstant ? (
+                            <>
+                              <span className="block font-extrabold text-error text-xl">${calculateInstantRate(nanny.hourlyRate!)}/hr</span>
+                              <span className="text-[10px] font-black uppercase text-error/60 bg-error/5 px-2 py-0.5 rounded-full">Instant Rate</span>
+                            </>
+                          ) : (
+                            <span className="block font-extrabold text-primary text-xl">${nanny.hourlyRate}/hr</span>
+                          )}
                         </div>
                       </div>
                     </label>
@@ -413,8 +387,10 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
                           <span className="text-sm text-on-surface-variant">Includes priority bookings</span>
                         </div>
                         <div className="text-right">
-                          <span className="block font-extrabold text-primary text-xl">${nanny.weeklyRate || '1200'}/wk</span>
-                          <span className="text-[10px] font-bold text-secondary uppercase">Save 15%</span>
+                          <span className="block font-extrabold text-primary text-xl">
+                            ${isInstant ? calculateInstantRate(weekly) : weekly}/wk
+                          </span>
+                          <span className="text-[10px] font-bold text-secondary uppercase">Save {savingsPercent}%</span>
                         </div>
                       </div>
                       {!(nanny.availability?.alwaysAvailable ?? true) && (
@@ -424,12 +400,19 @@ export function NannyPublicProfileClient({ nanny, reviews }: { nanny: any; revie
                       )}
                     </label>
                   </div>
-                  <Link 
-                    href={`/nannies/${nanny.id}/book/schedule`}
-                    className="w-full bg-primary text-on-primary font-headline font-bold py-5 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-lg mb-4 flex items-center justify-center gap-2"
-                  >
-                    Book {firstName} Now
-                  </Link>
+                  {nanny.isOccupied ? (
+                    <div className="w-full bg-rose-50 border border-rose-100 text-rose-700 font-headline font-bold py-5 rounded-2xl text-center text-lg mb-4 flex items-center justify-center gap-2">
+                      <MaterialIcon name="lock" />
+                      Currently Occupied
+                    </div>
+                  ) : (
+                    <Link 
+                      href={`/nannies/${nanny.id}/book/schedule`}
+                      className="w-full bg-primary text-on-primary font-headline font-bold py-5 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all text-lg mb-4 flex items-center justify-center gap-2"
+                    >
+                      Book {firstName} Now
+                    </Link>
+                  )}
                   <p className="text-center text-xs text-on-surface-variant px-6">
                     Cancel for free up to 48 hours before the scheduled start.
                   </p>

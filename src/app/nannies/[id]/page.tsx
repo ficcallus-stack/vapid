@@ -30,6 +30,7 @@ const getNanny = cache(async (id: string) => {
     location: nannyProfiles.location,
     experienceYears: nannyProfiles.experienceYears,
     hourlyRate: nannyProfiles.hourlyRate,
+    weeklyRate: nannyProfiles.weeklyRate,
     isVerified: nannyProfiles.isVerified,
     bio: nannyProfiles.bio,
     email: users.email,

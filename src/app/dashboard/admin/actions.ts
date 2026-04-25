@@ -2,11 +2,13 @@
 
 import { requireUser } from "@/lib/get-server-user";
 import { db } from "@/db";
-import { users, nannyProfiles, bookings, payments, walletTransactions, wallets, auditLogs } from "@/db/schema";
+import { users, nannyProfiles, bookings, payments, walletTransactions, wallets, auditLogs, referenceSubmissions } from "@/db/schema";
 import { eq, desc, like, or, count, sql, and, gte } from "drizzle-orm";
 import { adminAuth } from "@/lib/firebase-admin";
 import { approveWithdrawal, rejectWithdrawal } from "@/lib/actions/stripe-payouts";
 import { processRetainerBilling } from "@/lib/actions/retainer-billing";
+import { sendReferenceRequestEmail } from "@/lib/email";
+import { revalidatePath } from "next/cache";
 
 type UserRole = "parent" | "caregiver" | "admin" | "moderator";
 
@@ -229,12 +231,25 @@ export async function getUsers(page = 1, search = "", roleFilter = "") {
       orderBy: [desc(users.createdAt)],
       limit: pageSize,
       offset,
+      with: {
+        verification: true,
+      }
     }),
     db.select({ count: count() }).from(users).where(whereClause),
   ]);
 
+  // For each caregiver, fetch their reference submissions
+  const usersWithReferences = await Promise.all(userList.map(async (u) => {
+    if (u.role !== "caregiver") return u;
+    const refs = await db.query.referenceSubmissions.findMany({
+      where: eq(referenceSubmissions.caregiverId, u.id),
+      orderBy: [desc(referenceSubmissions.createdAt)],
+    });
+    return { ...u, references: refs };
+  }));
+
   return {
-    users: userList,
+    users: usersWithReferences,
     total: totalResult[0].count,
     page,
     pageSize,
@@ -313,4 +328,45 @@ export async function triggerRetainerSettlement() {
   });
 
   return results;
+}
+
+export async function resendReferenceEmail(referenceId: string) {
+  const caller = await requireAdmin();
+
+  const ref = await db.query.referenceSubmissions.findFirst({
+    where: eq(referenceSubmissions.id, referenceId),
+  });
+
+  if (!ref) throw new Error("Reference record not found.");
+
+  const userRecord = await db.query.users.findFirst({
+    where: eq(users.id, ref.caregiverId),
+  });
+
+  if (!userRecord) throw new Error("Caregiver profile not found.");
+
+  const result = await sendReferenceRequestEmail(
+    ref.employerEmail,
+    ref.employerName,
+    userRecord.fullName,
+    ref.token
+  );
+
+  await db.update(referenceSubmissions)
+    .set({
+      emailStatus: result.success ? "sent" : "failed",
+      lastEmailSentAt: new Date(),
+    })
+    .where(eq(referenceSubmissions.id, referenceId));
+
+  await db.insert(auditLogs).values({
+    actorId: caller.uid,
+    action: "resend_reference_email",
+    entityType: "reference_submission",
+    entityId: referenceId,
+    metadata: { success: result.success, email: ref.employerEmail },
+  });
+
+  revalidatePath("/dashboard/admin/caregivers");
+  return { success: result.success };
 }

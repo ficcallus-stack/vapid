@@ -44,7 +44,14 @@ export async function uploadToR2(
   });
 
   await getS3Client().send(command);
-  return fileName;
+  
+  try {
+    return getPublicR2Url(fileName);
+  } catch (e) {
+    // Fallback if NEXT_PUBLIC_R2_PUBLIC_URL is missing
+    console.warn("NEXT_PUBLIC_R2_PUBLIC_URL not set, returning fileName only");
+    return fileName;
+  }
 }
 
 export async function getPresignedUrl(fileName: string) {

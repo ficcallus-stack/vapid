@@ -43,6 +43,7 @@ const nextConfig = {
               "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com",
               "connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebaseapp.com wss://*.firebaseio.com https://*.stripe.com wss://*.ably.io https://*.ably.io https://realtime.ably.io wss://*.ably.net https://*.ably.net https://*.ably-realtime.com wss://*.ably-realtime.com https://*.mapbox.com https://us.i.posthog.com https://ipapi.co http://ip-api.com https://*.r2.dev https://*.cloudflarestorage.com",
               "frame-src 'self' https://*.stripe.com https://*.firebaseapp.com",
+              "media-src 'self' blob: https://*.r2.dev https://*.cloudflarestorage.com",
               "worker-src 'self' blob:",
               "object-src 'none'",
               "base-uri 'self'",

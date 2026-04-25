@@ -213,10 +213,30 @@ export async function sendReferenceRequestEmail(
   
   return sendEmail({
     to: [{ email: employerEmail, name: employerName }],
-    subject: `Reference Request: ${nannyName} (via KindredCare US)`,
+    subject: `Can you vouch for ${nannyName}? (KindredCare)`,
     htmlBody: referenceRequestTemplate(nannyName, employerName, verifyUrl),
     textBody: referenceRequestText(nannyName, employerName, verifyUrl),
-    from: { email: `trust@${domain()}`, name: "KindredCare US" },
+    from: { email: `trust@${domain()}`, name: "KindredCare Trust & Safety" },
+  });
+}
+
+export async function sendVerificationStatusEmail(
+  email: string,
+  name: string,
+  status: "verified" | "rejected",
+  notes?: string
+) {
+  const { verificationStatusTemplate, verificationStatusText } = await import("./email-templates");
+  const subject = status === "verified"
+    ? "Verified: Your professional dossier is approved! ✅"
+    : "Action Required: Update your verification dossier ⚠️";
+    
+  return sendEmail({
+    to: [{ email, name }],
+    subject,
+    htmlBody: verificationStatusTemplate(name, status, notes),
+    textBody: verificationStatusText(name, status, notes),
+    from: { email: `trust@${domain()}`, name: "KindredCare Trust & Safety" },
   });
 }
 

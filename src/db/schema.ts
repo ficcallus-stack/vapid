@@ -49,6 +49,7 @@ export const users = pgTable("users", {
   emergencyContactPhone: text("emergency_contact_phone"),
   lastRoleSwitchedAt: timestamp("last_role_switched_at"), 
   lastActive: timestamp("last_active").defaultNow(),
+  dateOfBirth: timestamp("date_of_birth"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -63,8 +64,8 @@ export const users = pgTable("users", {
 
 export const referrals = pgTable("referrals", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  referrerId: text("referrer_id").notNull().references(() => users.id),
-  refereeId: text("referee_id").notNull().references(() => users.id),
+  referrerId: text("referrer_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  refereeId: text("referee_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   status: referralStatusEnum("status").default("pending").notNull(),
   rewardAmount: integer("reward_amount").default(0).notNull(),
   completedAt: timestamp("completed_at"),
@@ -82,7 +83,7 @@ export const emailOtps = pgTable("email_otps", {
 
 // ── Nanny Profiles ─────────────────────────────────────────
 export const nannyProfiles = pgTable("nanny_profiles", {
-  id: text("id").primaryKey().references(() => users.id),
+  id: text("id").primaryKey().references(() => users.id, { onUpdate: "cascade" }),
   bio: text("bio"),
   experienceYears: integer("experience_years").default(0),
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }).default("0"),
@@ -124,7 +125,7 @@ export const nannyProfiles = pgTable("nanny_profiles", {
 // ── Children ───────────────────────────────────────────────
 export const children = pgTable("children", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  parentId: text("parent_id").notNull().references(() => users.id),
+  parentId: text("parent_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   name: text("name").notNull(),
   age: integer("age").notNull(),
   type: text("type").notNull(), // e.g., "toddler", "pre-schooler", "infant"
@@ -138,7 +139,7 @@ export const children = pgTable("children", {
 
 // ── Parent Profiles ────────────────────────────────────────
 export const parentProfiles = pgTable("parent_profiles", {
-  id: text("id").primaryKey().references(() => users.id),
+  id: text("id").primaryKey().references(() => users.id, { onUpdate: "cascade" }),
   familyName: text("family_name"),
   familyPhoto: text("family_photo"),
   location: text("location"),
@@ -153,8 +154,8 @@ export const parentProfiles = pgTable("parent_profiles", {
 // ── Care Team (Stage 1 overhaul) ───────────────────────────
 export const careTeam = pgTable("care_team", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  parentId: text("parent_id").notNull().references(() => users.id),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  parentId: text("parent_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   status: text("status").default("active").notNull(), // active, archived
   nickname: text("nickname"), // e.g., "Full-time Nanny", "Date-night regular"
   privateNotes: text("private_notes"), // For parents to remember things about the nanny
@@ -165,7 +166,7 @@ export const careTeam = pgTable("care_team", {
 // ── Jobs ───────────────────────────────────────────────────
 export const jobs = pgTable("jobs", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  parentId: text("parent_id").notNull().references(() => users.id),
+  parentId: text("parent_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   hiringType: text("hiring_type").default("hourly").notNull(), // "hourly" | "retainer"
   retainerBudget: integer("retainer_budget"), // weekly budget in cents
   title: text("title").notNull(),
@@ -203,7 +204,7 @@ export const jobs = pgTable("jobs", {
 export const applications = pgTable("applications", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   jobId: text("job_id").notNull().references(() => jobs.id),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   message: text("message"),
   status: applicationStatusEnum("status").default("pending").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -212,8 +213,8 @@ export const applications = pgTable("applications", {
 // ── Bookings ───────────────────────────────────────────────
 export const bookings = pgTable("bookings", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  parentId: text("parent_id").notNull().references(() => users.id),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  parentId: text("parent_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   jobId: text("job_id").references(() => jobs.id),
   seriesId: text("series_id"), // Nullable initially for Stage 2
   hiringMode: text("hiring_mode").default("hourly").notNull(), // "hourly" | "retainer"
@@ -243,6 +244,7 @@ export const bookings = pgTable("bookings", {
   phoneNumber: text("phone_number"), // Parent's mobile for this booking
   emergencyContactName: text("emergency_contact_name"),
   emergencyContactPhone: text("emergency_contact_phone"),
+  isInstant: boolean("is_instant").default(false).notNull(),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
@@ -255,8 +257,8 @@ export const bookings = pgTable("bookings", {
 // ── Booking Series (Stage 3 overhaul) ──────────────────────
 export const bookingSeries = pgTable("booking_series", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  parentId: text("parent_id").notNull().references(() => users.id),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  parentId: text("parent_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date"), // Nullable for perpetual
   startTime: text("start_time").notNull(), // e.g. "09:00"
@@ -282,7 +284,7 @@ export const payments = pgTable("payments", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   bookingId: text("booking_id").references(() => bookings.id),
   seriesId: text("series_id").references(() => bookingSeries.id), // New: Track retainer payments
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   amount: integer("amount").notNull(), // in cents
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   status: paymentStatusEnum("status").default("pending").notNull(),
@@ -295,7 +297,7 @@ export const conversations = pgTable("conversations", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   isSupport: boolean("is_support").default(false).notNull(), // To distinguish peer vs mod chats
   supportStatus: supportStatusEnum("support_status").default("open").notNull(),
-  assignedModeratorId: text("assigned_moderator_id").references(() => users.id),
+  assignedModeratorId: text("assigned_moderator_id").references(() => users.id, { onUpdate: "cascade" }),
   metadata: jsonb("metadata").$type<Record<string, any>>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -303,7 +305,7 @@ export const conversations = pgTable("conversations", {
 
 export const conversationMembers = pgTable("conversation_members", {
   conversationId: text("conversation_id").notNull().references(() => conversations.id),
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   isArchived: boolean("is_archived").default(false).notNull(),
   lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
 }, (table) => ({
@@ -314,7 +316,7 @@ export const conversationMembers = pgTable("conversation_members", {
 export const messages = pgTable("messages", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   conversationId: text("conversation_id").notNull().references(() => conversations.id),
-  senderId: text("sender_id").notNull().references(() => users.id),
+  senderId: text("sender_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   content: text("content"),
   fileUrl: text("file_url"),
   fileType: text("file_type"), // image, video, document
@@ -331,8 +333,8 @@ export const messages = pgTable("messages", {
 export const reviews = pgTable("reviews", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   bookingId: text("booking_id").references(() => bookings.id),
-  reviewerId: text("reviewer_id").notNull().references(() => users.id),
-  revieweeId: text("reviewee_id").notNull().references(() => users.id),
+  reviewerId: text("reviewer_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  revieweeId: text("reviewee_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   rating: integer("rating").notNull(), // 1-5
   comment: text("comment"),
   images: jsonb("images").$type<string[]>().default([]),
@@ -344,7 +346,7 @@ export const reviews = pgTable("reviews", {
 // ── Support Tickets ────────────────────────────────────────
 export const tickets = pgTable("tickets", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   title: text("title").notNull(),
   description: text("description"),
   status: ticketStatusEnum("status").default("open").notNull(),
@@ -352,14 +354,14 @@ export const tickets = pgTable("tickets", {
   category: ticketCategoryEnum("category").default("general").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  moderatorId: text("moderator_id").references(() => users.id),
+  moderatorId: text("moderator_id").references(() => users.id, { onUpdate: "cascade" }),
   conversationId: text("conversation_id").references(() => conversations.id),
 });
 
 export const ticketMessages = pgTable("ticket_messages", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   ticketId: text("ticket_id").notNull().references(() => tickets.id),
-  senderId: text("sender_id").notNull().references(() => users.id),
+  senderId: text("sender_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   content: text("content").notNull(),
   isInternal: boolean("is_internal").default(false).notNull(), // for Moderator notes
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -368,8 +370,8 @@ export const ticketMessages = pgTable("ticket_messages", {
 // ── Chat Unlocks ──────────────────────────────────────────
 export const chatUnlocks = pgTable("chat_unlocks", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  parentId: text("parent_id").notNull().references(() => users.id),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  parentId: text("parent_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   unlockedAt: timestamp("unlocked_at").defaultNow().notNull(),
   method: chatUnlockMethodEnum("method").notNull(),
 });
@@ -377,7 +379,7 @@ export const chatUnlocks = pgTable("chat_unlocks", {
 // ── Platform Credit Transactions ────────────────────────────
 export const platformCreditTransactions = pgTable("platform_credit_transactions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   bookingId: text("booking_id").references(() => bookings.id),
   amount: integer("amount").notNull(), // Number of credits (can be negative)
   type: platformCreditTransactionTypeEnum("type").notNull(),
@@ -388,7 +390,7 @@ export const platformCreditTransactions = pgTable("platform_credit_transactions"
 // ── Certifications ─────────────────────────────────────────
 export const certifications = pgTable("certifications", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   type: certificationTypeEnum("type").notNull(),
   status: certificationStatusEnum("status").default("pending_payment").notNull(),
   stripePaymentId: text("stripe_payment_id"),
@@ -426,7 +428,7 @@ export const examQuestions = pgTable("exam_questions", {
 export const examSubmissions = pgTable("exam_submissions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   examId: text("exam_id").notNull().references(() => certificationExams.id),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   answers: jsonb("answers").$type<Record<string, string>>().default({}).notNull(),
   score: integer("score"),
   status: examStatusEnum("status").default("started").notNull(),
@@ -434,7 +436,7 @@ export const examSubmissions = pgTable("exam_submissions", {
   startedAt: timestamp("started_at").defaultNow().notNull(),
   submittedAt: timestamp("submitted_at"),
   markedAt: timestamp("marked_at"),
-  moderatorId: text("moderator_id").references(() => users.id),
+  moderatorId: text("moderator_id").references(() => users.id, { onUpdate: "cascade" }),
   moderatorNotes: text("moderator_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -442,7 +444,7 @@ export const examSubmissions = pgTable("exam_submissions", {
 // ── Notifications ──────────────────────────────────────────
 export const notifications = pgTable("notifications", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   type: text("type").notNull(), // e.g., "application", "booking", "message", "payment"
   title: text("title").notNull(),
   message: text("message").notNull(),
@@ -463,13 +465,13 @@ export const broadcastNotifications = pgTable("broadcast_notifications", {
   linkUrl: text("link_url"),
   priority: text("priority").default("normal").notNull(), // normal, high
   targetRole: text("target_role").default("all").notNull(), // all, parent, caregiver
-  senderId: text("sender_id").notNull().references(() => users.id),
+  senderId: text("sender_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const userBroadcastReads = pgTable("user_broadcast_reads", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   broadcastId: text("broadcast_id").notNull().references(() => broadcastNotifications.id),
   readAt: timestamp("read_at").defaultNow().notNull(),
 });
@@ -477,7 +479,7 @@ export const userBroadcastReads = pgTable("user_broadcast_reads", {
 // ── Push Subscriptions ────────────────────────────────────
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   endpoint: text("endpoint").notNull().unique(),
   auth: text("auth").notNull(),
   p256dh: text("p256dh").notNull(),
@@ -486,7 +488,7 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 
 // ── Wallets ────────────────────────────────────────────────
 export const wallets = pgTable("wallets", {
-  id: text("id").primaryKey().references(() => users.id),
+  id: text("id").primaryKey().references(() => users.id, { onUpdate: "cascade" }),
   balance: integer("balance").default(0).notNull(), // in cents (Available for withdrawal)
   pendingBalance: integer("pending_balance").default(0).notNull(), // in cents (Locked in Escrow)
   processingBalance: integer("processing_balance").default(0).notNull(), // in cents (Settling from bank)
@@ -520,7 +522,7 @@ export const processedWebhookEvents = pgTable("processed_webhook_events", {
 
 export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  actorId: text("actor_id").notNull().references(() => users.id),
+  actorId: text("actor_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   action: text("action").notNull(), // e.g., "VERIFY_NANNY", "RESOLVE_TICKET", "MARK_EXAM"
   entityType: text("entity_type").notNull(), // e.g., "caregiver_verification", "ticket", "exam_submission"
   entityId: text("entity_id").notNull(),
@@ -531,11 +533,13 @@ export const auditLogs = pgTable("audit_logs", {
 // ── Reference Submissions (NEW: Trust Automation) ──────────
 export const referenceSubmissions = pgTable("reference_submissions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   employerEmail: text("employer_email").notNull(),
   employerName: text("employer_name").notNull(),
   token: text("token").notNull().unique(),
   status: text("status").default("pending").notNull(), // pending, completed
+  emailStatus: text("email_status").default("pending").notNull(), // pending, sent, failed
+  lastEmailSentAt: timestamp("last_email_sent_at"),
   rating: integer("rating"),
   comment: text("comment"),
   verifiedAt: timestamp("verified_at"),
@@ -544,7 +548,7 @@ export const referenceSubmissions = pgTable("reference_submissions", {
 
 // ── Caregiver Verifications ────────────────────────────────
 export const caregiverVerifications = pgTable("caregiver_verifications", {
-  id: text("id").primaryKey().references(() => users.id),
+  id: text("id").primaryKey().references(() => users.id, { onUpdate: "cascade" }),
   currentStep: integer("current_step").default(1).notNull(),
   
   // Step 1: Identity
@@ -555,6 +559,7 @@ export const caregiverVerifications = pgTable("caregiver_verifications", {
   // Step 2: Background Auth
   backgroundAuth: boolean("background_auth").default(false).notNull(),
   backgroundAuthTimestamp: timestamp("background_auth_timestamp"),
+  ssn: text("ssn"),
   
   // Step 3: References (JSONB equivalent or structured text)
   references: jsonb("references").$type<any[]>(), // Stored as jsonb for flexible structs
@@ -564,12 +569,12 @@ export const caregiverVerifications = pgTable("caregiver_verifications", {
   
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  moderatorId: text("moderator_id").references(() => users.id),
+  moderatorId: text("moderator_id").references(() => users.id, { onUpdate: "cascade" }),
 });
 
 // ── Parent Verifications ───────────────────────────────────
 export const parentVerifications = pgTable("parent_verifications", {
-  id: text("id").primaryKey().references(() => users.id),
+  id: text("id").primaryKey().references(() => users.id, { onUpdate: "cascade" }),
   status: verificationStatusEnum("status").default("none").notNull(),
   
   // Step 1: Identity
@@ -582,7 +587,7 @@ export const parentVerifications = pgTable("parent_verifications", {
   
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  moderatorId: text("moderator_id").references(() => users.id),
+  moderatorId: text("moderator_id").references(() => users.id, { onUpdate: "cascade" }),
 });
 
 // ── Relations ──────────────────────────────────────────────
@@ -609,6 +614,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   careTeamAsCaregiver: many(careTeam, { relationName: "careTeamCaregiver" }),
   broadcastReads: many(userBroadcastReads),
   pushSubscriptions: many(pushSubscriptions),
+  referenceSubmissions: many(referenceSubmissions),
 }));
 
 export const broadcastNotificationsRelations = relations(broadcastNotifications, ({ one, many }) => ({
@@ -629,8 +635,14 @@ export const nannyProfilesRelations = relations(nannyProfiles, ({ one }) => ({
   user: one(users, { fields: [nannyProfiles.id], references: [users.id] }),
 }));
 
-export const caregiverVerificationsRelations = relations(caregiverVerifications, ({ one }) => ({
+export const caregiverVerificationsRelations = relations(caregiverVerifications, ({ one, many }) => ({
   user: one(users, { fields: [caregiverVerifications.id], references: [users.id] }),
+  submissions: many(referenceSubmissions),
+}));
+
+export const referenceSubmissionsRelations = relations(referenceSubmissions, ({ one }) => ({
+  caregiver: one(users, { fields: [referenceSubmissions.caregiverId], references: [users.id] }),
+  verification: one(caregiverVerifications, { fields: [referenceSubmissions.caregiverId], references: [caregiverVerifications.id] }),
 }));
 
 export const parentVerificationsRelations = relations(parentVerifications, ({ one }) => ({
@@ -761,8 +773,8 @@ export const bookingSeriesRelations = relations(bookingSeries, ({ one, many }) =
 // ── Care Milestones (Stage 5 Overhaul) ────────────────────
 export const careMilestones = pgTable("care_milestones", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  parentId: text("parent_id").notNull().references(() => users.id),
-  caregiverId: text("caregiver_id").notNull().references(() => users.id),
+  parentId: text("parent_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
+  caregiverId: text("caregiver_id").notNull().references(() => users.id, { onUpdate: "cascade" }),
   content: text("content").notNull(),
   photoUrl: text("photo_url"),
   type: text("type").default("moment").notNull(), // moment, motor_skill, funny_moment, first_word
@@ -788,7 +800,7 @@ export const newsletterSubscribers = pgTable("newsletter_subscribers", {
 // ── Search & Filter Analytics ──────────────────────────────
 export const searchAnalytics = pgTable("search_analytics", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id").references(() => users.id),
+  userId: text("user_id").references(() => users.id, { onUpdate: "cascade" }),
   queryText: text("query_text").notNull(),
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),

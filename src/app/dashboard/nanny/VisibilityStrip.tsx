@@ -19,10 +19,11 @@ export function VisibilityStrip({ isVerified, verificationStatus, missingFields,
   const router = useRouter();
 
   // 1. Determine State
+  const effectiveIsVerified = isVerified || verificationStatus === "verified";
   const isPending = verificationStatus === "pending";
   const isIncomplete = missingFields.length > 0;
   const isEnrolledNotPassed = enrolledInStandards && !isPremium;
-  const isLive = isVerified && !isIncomplete && !isEnrolledNotPassed;
+  const isLive = effectiveIsVerified && !isIncomplete && !isEnrolledNotPassed;
 
   if (isLive) return null;
 
@@ -37,7 +38,7 @@ export function VisibilityStrip({ isVerified, verificationStatus, missingFields,
     message = "Verification Pending: Finalizing Safety Clearances";
     bgColor = "bg-amber-500";
     icon = "history";
-  } else if (!isVerified) {
+  } else if (!effectiveIsVerified) {
     message = "Marketplace Access Restricted: Identity Verification Required";
     bgColor = "bg-rose-600";
     icon = "verified_user";
@@ -106,21 +107,21 @@ export function VisibilityStrip({ isVerified, verificationStatus, missingFields,
 
             <div className="space-y-4">
               {/* Verification Status */}
-              {!isVerified && (
+              {!effectiveIsVerified && (
                 <Link href="/dashboard/nanny/verification" className="block text-inherit">
                   <div className={cn(
                     "p-4 rounded-2xl flex items-center gap-4 border group hover:border-amber-200 hover:bg-amber-50/30 transition-all",
                     isPending ? "bg-amber-50 border-amber-100" : "bg-rose-50 border-rose-100"
                   )}>
                     <MaterialIcon 
-                      name={isVerified ? "verified" : (isPending ? "history" : "cancel")} 
-                      className={cn("text-xl", isVerified ? "text-emerald-500" : (isPending ? "text-amber-500" : "text-rose-500"))} 
+                      name={effectiveIsVerified ? "verified" : (isPending ? "history" : "cancel")} 
+                      className={cn("text-xl", effectiveIsVerified ? "text-emerald-500" : (isPending ? "text-amber-500" : "text-rose-500"))} 
                       fill 
                     />
                     <div className="flex-grow">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">Identity Check</p>
-                      <p className={cn("text-xs font-bold", isVerified ? "text-emerald-700" : (isPending ? "text-amber-700" : "text-rose-700"))}>
-                        {isVerified ? "Vetted & Verified" : (isPending ? "Under Review" : "Action Required")}
+                      <p className={cn("text-xs font-bold", effectiveIsVerified ? "text-emerald-700" : (isPending ? "text-amber-700" : "text-rose-700"))}>
+                        {effectiveIsVerified ? "Vetted & Verified" : (isPending ? "Under Review" : "Action Required")}
                       </p>
                     </div>
                     <MaterialIcon name="chevron_right" className="text-slate-300 group-hover:text-amber-400" />

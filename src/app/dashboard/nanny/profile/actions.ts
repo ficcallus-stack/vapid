@@ -25,13 +25,13 @@ export async function updateNannyProfile(data: UpdateNannyProfileInput) {
   const { 
     fullName, bio, hourlyRate, weeklyRate, experienceYears, location,
     education, coreSkills, specializations, videoUrl, availability, logistics, profileImageUrl,
-    hasCar, carDescription, detailedExperience, maxTravelDistance, photos
+    hasCar, carDescription, detailedExperience, maxTravelDistance, photos, dateOfBirth
   } = parsed.data;
 
   let { latitude, longitude } = parsed.data;
 
   // 0. Resolve coordinates if missing but location is present
-  if (!latitude || !longitude) {
+  if ((latitude === null || latitude === undefined) || (longitude === null || longitude === undefined)) {
     if (location) {
       const coords = await GeoEngine.geocode(location);
       if (coords) {
@@ -41,13 +41,11 @@ export async function updateNannyProfile(data: UpdateNannyProfileInput) {
     }
   }
 
-  // 1. Fetch current data for name change restriction
-  const existingUser = await db.query.users.findFirst({
-     where: eq(users.id, clerkUser.uid)
-  });
-  const existingProfile = await db.query.nannyProfiles.findFirst({
-     where: eq(nannyProfiles.id, clerkUser.uid)
-  });
+  // 1. Fetch current data in parallel
+  const [existingUser, existingProfile] = await Promise.all([
+    db.query.users.findFirst({ where: eq(users.id, clerkUser.uid) }),
+    db.query.nannyProfiles.findFirst({ where: eq(nannyProfiles.id, clerkUser.uid) })
+  ]);
 
   const isNameChanged = existingUser?.fullName !== fullName;
   let lastNameUpdateAt = existingProfile?.lastNameUpdateAt;
@@ -65,64 +63,73 @@ export async function updateNannyProfile(data: UpdateNannyProfileInput) {
     lastNameUpdateAt = new Date();
   }
 
-  // 2. Update user table
-  await db.update(users).set({
-    fullName,
-    profileImageUrl,
-    updatedAt: new Date(),
-  }).where(eq(users.id, clerkUser.uid));
+  // Perform atomic update
+  try {
+    await db.transaction(async (tx) => {
+      // 1. Update user name (The Source of Truth for identity)
+      await tx.update(users).set({ 
+        fullName, 
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+        updatedAt: new Date() 
+      }).where(eq(users.id, clerkUser.uid));
 
-  // 3. Update or insert nanny_profiles table
-  await db.insert(nannyProfiles).values({
-    id: clerkUser.uid,
-    bio,
-    hourlyRate,
-    weeklyRate,
-    experienceYears,
-    location,
-    latitude: latitude ? latitude.toString() : undefined,
-    longitude: longitude ? longitude.toString() : undefined,
-    education,
-    coreSkills: coreSkills || [],
-    specializations: specializations || [],
-    videoUrl: videoUrl || "",
-    availability: availability || {},
-    logistics: logistics || [],
-    photos: photos || [],
-    // Overhaul fields
-    lastNameUpdateAt,
-    hasCar: hasCar ?? false,
-    carDescription,
-    detailedExperience,
-    maxTravelDistance: maxTravelDistance || 25,
-  }).onConflictDoUpdate({
-    target: nannyProfiles.id,
-    set: {
-      bio,
-      hourlyRate,
-      weeklyRate,
-      experienceYears,
-      location,
-      latitude: latitude ? latitude.toString() : undefined,
-      longitude: longitude ? longitude.toString() : undefined,
-      education,
-      coreSkills: coreSkills || [],
-      specializations: specializations || [],
-      videoUrl: videoUrl || "",
-      availability: availability || {},
-      logistics: logistics || [],
-      photos: photos || undefined, // Only update if provided
-      // Overhaul fields
-      lastNameUpdateAt,
-      hasCar: hasCar ?? false,
-      carDescription,
-      detailedExperience,
-      maxTravelDistance: maxTravelDistance || 25,
-    }
-  });
+      // 2. Upsert Nanny Profile (Professional Dossier)
+      await tx.insert(nannyProfiles).values({
+        id: clerkUser.uid,
+        bio: bio || "",
+        hourlyRate: hourlyRate || "0",
+        weeklyRate: weeklyRate || "0",
+        experienceYears: experienceYears || 0,
+        location: location || "",
+        latitude: (latitude !== null && latitude !== undefined) ? latitude.toString() : null,
+        longitude: (longitude !== null && longitude !== undefined) ? longitude.toString() : null,
+        education: education || "",
+        coreSkills: coreSkills || [],
+        specializations: specializations || [],
+        videoUrl: videoUrl || "",
+        availability: availability || {},
+        logistics: logistics || [],
+        photos: photos || [],
+        lastNameUpdateAt,
+        hasCar: hasCar ?? false,
+        carDescription: carDescription || "",
+        detailedExperience: detailedExperience || "",
+        maxTravelDistance: maxTravelDistance || 25,
+        updatedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: nannyProfiles.id,
+        set: {
+          bio: bio || "",
+          hourlyRate: hourlyRate || "0",
+          weeklyRate: weeklyRate || "0",
+          experienceYears: experienceYears || 0,
+          location: location || "",
+          latitude: (latitude !== null && latitude !== undefined) ? latitude.toString() : null,
+          longitude: (longitude !== null && longitude !== undefined) ? longitude.toString() : null,
+          education: education || "",
+          coreSkills: coreSkills || [],
+          specializations: specializations || [],
+          videoUrl: videoUrl || "",
+          availability: availability || {},
+          logistics: logistics || [],
+          photos: photos || [],
+          lastNameUpdateAt,
+          hasCar: hasCar ?? false,
+          carDescription: carDescription || "",
+          detailedExperience: detailedExperience || "",
+          maxTravelDistance: maxTravelDistance || 25,
+          updatedAt: new Date(),
+        }
+      });
+    });
 
-  revalidatePath("/dashboard/nanny/profile");
-  revalidatePath(`/nannies/${clerkUser.uid}`);
+    revalidatePath("/dashboard/nanny/profile");
+    revalidatePath(`/nannies/${clerkUser.uid}`);
+    revalidatePath("/dashboard/nanny/verification");
+  } catch (error) {
+    console.error("[CRITICAL] Profile Save Failure:", error);
+    throw new Error("Failed to save profile. Your data is safe, please try again.");
+  }
 }
 
 import { uploadToR2 } from "@/lib/r2";
@@ -169,6 +176,49 @@ export async function uploadProfilePhotos(formData: FormData) {
 
   revalidatePath("/dashboard/nanny/profile");
   revalidatePath(`/nannies/${clerkUser.uid}`);
+  return { success: true, urls: uploadedUrls };
+}
+
+export async function uploadAvatar(formData: FormData) {
+  const clerkUser = await requireUser();
+  const file = formData.get("file") as File;
+  if (!file) throw new Error("No file provided");
+
+  const { success } = await rateLimit(`uploadAvatar:${clerkUser.uid}`);
+  if (!success) throw new Error("Too many requests. Please try again later.");
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const fileName = `profiles/${clerkUser.uid}/avatar_${Date.now()}_${file.name}`;
+  const url = await uploadToR2(buffer, fileName, file.type);
+
+  await db.update(users).set({
+    profileImageUrl: url,
+    updatedAt: new Date(),
+  }).where(eq(users.id, clerkUser.uid));
+
+  revalidatePath("/dashboard/nanny/profile");
+  return { success: true, url };
+}
+
+export async function uploadVideo(formData: FormData) {
+  const clerkUser = await requireUser();
+  const file = formData.get("file") as File;
+  if (!file) throw new Error("No file provided");
+
+  const { success } = await rateLimit(`uploadVideo:${clerkUser.uid}`);
+  if (!success) throw new Error("Too many requests. Please try again later.");
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const fileName = `profiles/${clerkUser.uid}/intro_video_${Date.now()}`;
+  const url = await uploadToR2(buffer, fileName, file.type);
+
+  await db.update(nannyProfiles).set({
+    videoUrl: url,
+    updatedAt: new Date(),
+  }).where(eq(nannyProfiles.id, clerkUser.uid));
+
+  revalidatePath("/dashboard/nanny/profile");
+  return { success: true, url };
 }
 
 export async function deleteProfilePhoto(photoUrl: string) {

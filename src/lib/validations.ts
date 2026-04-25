@@ -59,6 +59,7 @@ export const updateNannyProfileSchema = z.object({
   carDescription: z.string().max(500).optional(),
   detailedExperience: z.string().max(5000).optional(),
   maxTravelDistance: z.coerce.number().int().min(0).max(100, "Travel radius cannot exceed 100 miles.").optional(),
+  dateOfBirth: z.string().optional(),
 });
 
 export type UpdateNannyProfileInput = z.infer<typeof updateNannyProfileSchema>;

@@ -25,12 +25,17 @@ export default function SignUpPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Initialize referral code from URL
+  // Initialize referral code and role from URL
   useEffect(() => {
     const ref = searchParams.get("ref");
     if (ref) {
       setReferralCode(ref);
       validateCode(ref);
+    }
+
+    const roleParam = searchParams.get("role") as any;
+    if (roleParam === "parent" || roleParam === "caregiver") {
+      setRole(roleParam);
     }
   }, [searchParams]);
 

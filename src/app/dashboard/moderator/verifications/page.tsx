@@ -1,103 +1,157 @@
-import { db } from "@/db";
-import { caregiverVerifications, users, nannyProfiles } from "@/db/schema";
-import { eq, desc, count } from "drizzle-orm";
-import { syncUser } from "@/lib/user-sync";
-import { redirect } from "next/navigation";
-import VerificationsHub from "./VerificationsHub";
+"use client";
 
-export default async function VerificationsPage() {
-  const user = await syncUser();
-  if (!user || user.role !== "moderator") redirect("/login");
+import { useEffect, useState } from "react";
+import { getVerificationStats, getVerificationsList } from "./actions";
+import { MaterialIcon } from "@/components/MaterialIcon";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
-  // Fetch Full Data for the Hub
-  const queueItems = await db.select({
-    id: caregiverVerifications.id,
-    status: caregiverVerifications.status,
-    currentStep: caregiverVerifications.currentStep,
-    createdAt: caregiverVerifications.createdAt,
-    fullName: users.fullName,
-    isPremium: users.isPremium,
-    email: users.email,
-    // Step 1: Identity
-    idFrontUrl: caregiverVerifications.idFrontUrl,
-    idBackUrl: caregiverVerifications.idBackUrl,
-    selfieUrl: caregiverVerifications.selfieUrl,
-    
-    // Step 2: Background
-    backgroundAuth: caregiverVerifications.backgroundAuth,
-    backgroundAuthTimestamp: caregiverVerifications.backgroundAuthTimestamp,
-    
-    // Step 3: Profile/Logistics
-    bio: nannyProfiles.bio,
-    hourlyRate: nannyProfiles.hourlyRate,
-    experienceYears: nannyProfiles.experienceYears,
-    location: nannyProfiles.location,
-    photos: nannyProfiles.photos,
-    availability: nannyProfiles.availability,
-    specializations: nannyProfiles.specializations,
-    logistics: nannyProfiles.logistics,
-    
-    // Step 4: References
-    references: caregiverVerifications.references,
-  })
-  .from(caregiverVerifications)
-  .innerJoin(users, eq(caregiverVerifications.id, users.id))
-  .leftJoin(nannyProfiles, eq(caregiverVerifications.id, nannyProfiles.id))
-  .orderBy(desc(users.isPremium), desc(caregiverVerifications.createdAt));
+export default function ModeratorVerificationsPage() {
+  const [status, setStatus] = useState<"pending" | "verified" | "rejected">("pending");
+  const [sort, setSort] = useState<"recent" | "earliest">("recent");
+  const [search, setSearch] = useState("");
+  const [stats, setStats] = useState<any>(null);
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Stats Logic for the sticky top-level oversight
-  const [criticalCount] = await db.select({ value: count() })
-    .from(caregiverVerifications)
-    .innerJoin(users, eq(caregiverVerifications.id, users.id))
-    .where(eq(users.isPremium, true));
+  useEffect(() => {
+    const handler = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const [s, l] = await Promise.all([
+          getVerificationStats(),
+          getVerificationsList({ status, sort, search })
+        ]);
+        setStats(s);
+        setList(l);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
 
-  const [inReviewCount] = await db.select({ value: count() })
-    .from(caregiverVerifications)
-    .where(eq(caregiverVerifications.status, "pending"));
-
-  const [queueDepth] = await db.select({ value: count() })
-    .from(caregiverVerifications)
-    .where(eq(caregiverVerifications.status, "none"));
-
-  const [totalVerified] = await db.select({ value: count() })
-    .from(caregiverVerifications)
-    .where(eq(caregiverVerifications.status, "verified"));
+    return () => clearTimeout(handler);
+  }, [status, sort, search]);
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto">
-      {/* Stats Header (Clean & Professional) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Active Queue</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black font-headline text-primary italic leading-none">{inReviewCount?.value || 0}</h3>
-            <span className="text-amber-600 text-[10px] font-black uppercase">Pending Review</span>
+    <div className="bg-surface min-h-screen pb-20">
+      <header className="mb-12">
+        <h1 className="text-4xl font-headline font-black text-primary italic tracking-tighter mb-4">Security Dispatch.</h1>
+        <p className="text-on-surface-variant/60 font-medium italic text-sm">Reviewing identity and professional vetting dossiers.</p>
+      </header>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+        {[
+          { label: "Pending", value: stats?.pending ?? 0, color: "text-amber-600", bg: "bg-amber-50" },
+          { label: "Verified", value: stats?.verified ?? 0, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { label: "Rejected", value: stats?.rejected ?? 0, color: "text-red-600", bg: "bg-red-50" },
+          { label: "Total Load", value: stats?.total ?? 0, color: "text-primary", bg: "bg-slate-100" }
+        ].map((stat, i) => (
+          <div key={i} className={cn("p-8 rounded-[2.5rem] border border-outline-variant/10 shadow-sm", stat.bg)}>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2">{stat.label}</p>
+            <p className={cn("text-4xl font-headline font-black italic tracking-tighter leading-none", stat.color)}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Controls */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+        <div className="flex items-center gap-6 w-full md:w-auto">
+          <div className="relative flex-1 md:w-80 group">
+             <div className="absolute left-6 top-1/2 -translate-y-1/2 text-primary/20 group-focus-within:text-primary transition-colors">
+                <MaterialIcon name="person_search" />
+             </div>
+             <input 
+               type="text"
+               value={search}
+               onChange={(e) => setSearch(e.target.value)}
+               placeholder="Search by name or email..."
+               className="w-full bg-white border border-outline-variant/10 pl-16 pr-6 py-4 rounded-[1.5rem] text-xs font-bold text-primary shadow-sm focus:ring-4 ring-primary/5 outline-none transition-all placeholder:text-on-surface-variant/20 italic"
+             />
+          </div>
+
+          <div className="flex bg-white p-1.5 rounded-[1.5rem] shadow-sm border border-outline-variant/5 shrink-0">
+          {(["pending", "verified", "rejected"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className={cn(
+                "px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all",
+                status === s ? "bg-primary text-white shadow-lg" : "text-on-surface-variant hover:bg-slate-50"
+              )}
+            >
+              {s}
+            </button>
+          ))}
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Priority Apps</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black font-headline text-secondary italic leading-none">{criticalCount?.value || 0}</h3>
-            <span className="text-secondary text-[10px] font-black animate-pulse uppercase">Elite Enrollees</span>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Total Verified</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black font-headline text-primary italic leading-none">{totalVerified?.value || 0}</h3>
-            <span className="text-slate-400 text-[10px] font-black uppercase">Platform Total</span>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Queue Depth</p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-3xl font-black font-headline text-primary italic leading-none">{queueDepth?.value || 0}</h3>
-            <span className="text-slate-400 text-[10px] font-black uppercase">Not Started</span>
-          </div>
+
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] font-black uppercase tracking-widest text-primary/40 italic">Sort By</span>
+          <select 
+            value={sort}
+            onChange={(e) => setSort(e.target.value as any)}
+            className="bg-white border border-outline-variant/10 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-primary shadow-sm focus:ring-4 ring-primary/5 outline-none appearance-none"
+          >
+            <option value="recent">Recent First</option>
+            <option value="earliest">Earliest First</option>
+          </select>
         </div>
       </div>
 
-      <VerificationsHub queueItems={queueItems} />
+      {/* List */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="py-20 text-center animate-pulse">
+            <MaterialIcon name="sync" className="animate-spin text-primary/20 text-4xl" />
+          </div>
+        ) : list.length === 0 ? (
+          <div className="py-20 text-center bg-white rounded-[3rem] border border-dashed border-outline-variant/20">
+            <p className="text-on-surface-variant/40 font-bold italic">No dossiers in this queue.</p>
+          </div>
+        ) : (
+          list.map((item) => (
+            <Link 
+              key={item.id} 
+              href={`/dashboard/moderator/verifications/${item.id}`}
+              className="flex flex-col md:flex-row items-center justify-between p-6 bg-white rounded-[2rem] border border-outline-variant/5 hover:border-primary/20 hover:shadow-xl transition-all group"
+            >
+              <div className="flex items-center gap-6">
+                <div className="w-12 h-12 bg-primary/5 rounded-2xl flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                  <MaterialIcon name="person" fill={status === 'verified'} />
+                </div>
+                <div>
+                  <h3 className="font-headline font-black text-primary italic tracking-tight leading-none mb-2">{item.userName}</h3>
+                  <p className="text-xs font-medium text-on-surface-variant/40">{item.userEmail}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-12 mt-4 md:mt-0">
+                <div className="text-right">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 mb-1 leading-none italic">Submitted</p>
+                  <p className="text-xs font-bold text-primary italic">{format(new Date(item.updatedAt), "MMM d, h:mm a")}</p>
+                </div>
+
+                {status !== 'pending' && (
+                  <div className="text-right border-l border-outline-variant/10 pl-12">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 mb-1 leading-none italic">
+                      {status === 'verified' ? 'Verified By' : 'Rejected By'}
+                    </p>
+                    <p className="text-xs font-bold text-primary italic">{item.moderatorName || "System"}</p>
+                  </div>
+                )}
+
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-primary/20 group-hover:text-primary transition-colors">
+                   <MaterialIcon name="arrow_forward" />
+                </div>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
     </div>
   );
 }

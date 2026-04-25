@@ -2,7 +2,7 @@ import { syncUser } from "@/lib/user-sync";
 import { db } from "@/db";
 import { nannyProfiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { ProfileWizard } from "./ProfileWizard";
+import ProfileWizard from "./ProfileWizard";
 import { safeParseJson } from "@/lib/utils";
 import { redirect } from "next/navigation";
 
