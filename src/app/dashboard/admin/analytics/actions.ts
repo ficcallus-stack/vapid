@@ -14,7 +14,8 @@ import {
   applications,
   examSubmissions,
   wallets,
-  pageVisits
+  pageVisits,
+  certifications
 } from "@/db/schema";
 import { sql, eq, and, gte } from "drizzle-orm";
 import { requireUser } from "@/lib/get-server-user";
@@ -99,10 +100,17 @@ export async function getFinancialIntelData() {
     total: sql<number>`SUM(${wallets.balance} + ${wallets.pendingBalance} + ${wallets.processingBalance})`
   }).from(wallets);
 
+  const certs = await db.select({ type: certifications.type, count: sql<number>`COUNT(*)` }).from(certifications).groupBy(certifications.type);
+  let upskillingRevenue = 0;
+  certs.forEach(c => {
+    if (c.type === 'standards_program') upskillingRevenue += Number(c.count) * 4500;
+    if (c.type === 'elite_bundle') upskillingRevenue += Number(c.count) * 15000;
+  });
+
   const commissions = {
     nannyBookings: totalGmv * 0.15,
     bgChecks: 42105, // static heuristic until stripe products mapped
-    upskilling: 18440
+    upskilling: upskillingRevenue / 100 // Convert cents to dollars
   };
   
   const premiumUsers = await db.select({ count: sql<number>`COUNT(*)` }).from(users).where(eq(users.isPremium, true));
@@ -188,8 +196,43 @@ export async function getMarketplaceHealthData(timeRange: "1h" | "24h" | "7d" | 
   const appDensity = (totalApps[0]?.count || 0) / (totalJobs[0]?.count || 1);
   const closedJobs = await db.select({ count: sql<number>`COUNT(*)` }).from(jobs).where(eq(jobs.status, 'closed'));
   const fulfillmentRate = totalJobs[0]?.count > 0 ? (closedJobs[0]?.count / totalJobs[0]?.count) * 100 : 0;
+
+  // 3. Unmock Time to Hire
+  const timeDiff = await db.select({
+    avgDays: sql<number>`AVG(EXTRACT(EPOCH FROM (${bookings.createdAt} - ${jobs.createdAt})) / 86400)`
+  }).from(bookings).innerJoin(jobs, eq(bookings.jobId, jobs.id));
+  const timeToHire = Number(timeDiff[0]?.avgDays || 0).toFixed(1);
+
+  // 4. Unmock Retention Rate
+  const totalParentsBooking = await db.select({ count: sql<number>`COUNT(DISTINCT ${bookings.parentId})` }).from(bookings);
+  const repeatParents = await db.select({ parentId: bookings.parentId }).from(bookings).groupBy(bookings.parentId).having(sql`COUNT(*) > 1`);
+  const retentionRate = totalParentsBooking[0]?.count > 0 ? ((repeatParents.length / totalParentsBooking[0]?.count) * 100).toFixed(1) : "0";
   
-  // 3. Unmock Yield Regions (Join bookings -> jobs -> parent profile locations)
+  // 5. Unmock Supply/Demand
+  const nanniesByState = await db.select({ location: nannyProfiles.location, count: sql<number>`COUNT(*)` })
+    .from(nannyProfiles).innerJoin(users, eq(users.id, nannyProfiles.id)).where(eq(users.role, 'caregiver')).groupBy(nannyProfiles.location);
+  const jobsByState = await db.select({ location: jobs.location, count: sql<number>`COUNT(*)` })
+    .from(jobs).where(eq(jobs.status, 'open')).groupBy(jobs.location);
+
+  const locationsDemandMap = new Map();
+  nanniesByState.forEach(n => locationsDemandMap.set(n.location, { supply: Number(n.count), demand: 0 }));
+  jobsByState.forEach(j => {
+    const existing = locationsDemandMap.get(j.location) || { supply: 0, demand: 0 };
+    existing.demand = Number(j.count);
+    locationsDemandMap.set(j.location, existing);
+  });
+
+  const supplyDemand = Array.from(locationsDemandMap.entries())
+    .filter(([loc]) => loc && loc.trim() !== "")
+    .map(([state, data]) => {
+      const ratio = data.demand > 0 ? (data.supply / data.demand) : data.supply;
+      let status = 'Healthy'; let color = 'bg-tertiary-container'; let fillPercent = 70;
+      if (ratio < 0.9) { status = 'Undersupplied'; color = 'bg-error'; fillPercent = Math.min(100, Math.max(10, ratio * 50)); }
+      else if (ratio > 1.3) { status = 'Oversupplied'; color = 'bg-primary-container'; fillPercent = Math.min(100, 50 + (ratio * 20)); }
+      return { state, ratio: ratio.toFixed(1), status, fillPercent, color };
+    }).sort((a, b) => Number(b.ratio) - Number(a.ratio)).slice(0, 5);
+
+  // 6. Unmock Yield Regions (Join bookings -> jobs -> parent profile locations)
   const yieldData = await db.select({
     location: jobs.location,
     volume: sql<number>`SUM(${bookings.totalAmount})`
@@ -207,15 +250,12 @@ export async function getMarketplaceHealthData(timeRange: "1h" | "24h" | "7d" | 
   }));
 
   return {
-    timeToHire: 4.2,
+    timeToHire,
     appDensity,
     fulfillmentRate,
-    retentionRate: 68.7,
-    supplyDemand: [
-      { state: 'California', ratio: 1.2, status: 'Healthy', fillPercent: 75, color: "bg-tertiary-container" },
-      { state: 'New York', ratio: 0.8, status: 'Undersupplied', fillPercent: 40, color: "bg-error" },
-      { state: 'Texas', ratio: 1.5, status: 'Oversupplied', fillPercent: 90, color: "bg-primary-container" },
-      { state: 'Florida', ratio: 1.1, status: 'Healthy', fillPercent: 70, color: "bg-tertiary-container" }
+    retentionRate,
+    supplyDemand: supplyDemand.length > 0 ? supplyDemand : [
+      { state: 'System Wide', ratio: 1.0, status: 'Healthy', fillPercent: 50, color: "bg-tertiary-container" }
     ],
     yieldRegions: yieldRegions.length > 0 ? yieldRegions : [
       { region: "Awaiting Bookings", volume: 0, growth: 0 }
