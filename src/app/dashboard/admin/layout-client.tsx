@@ -30,7 +30,7 @@ export default function AdminDashboardLayoutClient({ children, user }: LayoutPro
       <aside className="h-screen w-64 fixed left-0 top-0 flex flex-col bg-slate-50 border-r border-slate-200/50 p-4 gap-y-4 font-headline text-sm tracking-tight z-50">
         <div className="mb-8 px-4 py-6">
           <h1 className="text-xl font-black text-[#1D3557] tracking-tighter leading-none italic">Kindred Admin</h1>
-          <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">System Oversight</p>
+          <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Admin Area</p>
         </div>
 
         <nav className="flex flex-col h-full gap-y-1">
@@ -86,14 +86,14 @@ export default function AdminDashboardLayoutClient({ children, user }: LayoutPro
         <header className="fixed top-0 right-0 left-64 z-40 bg-white/80 backdrop-blur-xl flex items-center justify-between px-8 py-3 h-16 shadow-sm shadow-[#1D3557]/5 border-b border-slate-100">
           <div className="flex items-center gap-4">
             <span className="text-xs font-black text-[#1D3557] uppercase tracking-[0.2em] italic leading-none">
-              Admin Central
+              Admin Overview
             </span>
             <div className="h-4 w-px bg-slate-200 mx-2"></div>
             <div className="relative group">
               <MaterialIcon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg group-focus-within:text-[#1D3557] transition-colors" />
               <input 
                 type="text" 
-                placeholder="Search community..." 
+                placeholder="Search users..."
                 className="pl-10 pr-4 py-2 bg-slate-100/50 border-none rounded-full text-xs w-64 focus:ring-2 focus:ring-[#1D3557]/20 transition-all outline-none"
               />
             </div>
@@ -113,7 +113,7 @@ export default function AdminDashboardLayoutClient({ children, user }: LayoutPro
             <div className="flex items-center gap-3">
               <div className="text-right">
                 <p className="text-xs font-bold text-[#1D3557] leading-none">{user.fullName}</p>
-                <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">Super Admin</p>
+                <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-1">Administrator</p>
               </div>
               <img 
                 src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.fullName}`} 
