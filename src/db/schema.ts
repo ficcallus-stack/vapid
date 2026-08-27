@@ -829,3 +829,15 @@ export const careActivitiesRelations = relations(careActivities, ({ one }) => ({
     parent: one(users, { fields: [careActivities.parentId], references: [users.id] }),
     caregiver: one(users, { fields: [careActivities.caregiverId], references: [users.id] }),
 }));
+
+// ── Page Visits (Analytics) ─────────────────────────
+export const pageVisits = pgTable("page_visits", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  path: text("path").notNull(),
+  referrer: text("referrer"),
+  country: text("country"),
+  region: text("region"),
+  city: text("city"),
+  ipHash: text("ip_hash"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

@@ -16,6 +16,16 @@ export default function MarketplaceHealthTab({ data }: { data: any }) {
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 lg:col-span-3 bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/5">
           <div className="flex justify-between items-start mb-4">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <MaterialIcon name="visibility" className="text-primary" />
+            </div>
+          </div>
+          <p className="text-on-surface-variant text-sm font-medium">Total Visitors</p>
+          <h3 className="text-3xl font-bold text-primary mt-1">{data.totalVisitors?.toLocaleString() || 0}</h3>
+        </div>
+
+        <div className="col-span-12 lg:col-span-3 bg-surface-container-lowest p-6 rounded-2xl shadow-sm border border-outline-variant/5">
+          <div className="flex justify-between items-start mb-4">
             <div className="w-10 h-10 bg-secondary-fixed rounded-lg flex items-center justify-center">
               <MaterialIcon name="timer" className="text-on-secondary-fixed" />
             </div>
@@ -82,19 +92,50 @@ export default function MarketplaceHealthTab({ data }: { data: any }) {
           </div>
         </div>
 
-        {/* Regions */}
-        <div className="col-span-12 lg:col-span-4 bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-outline-variant/5">
-          <h3 className="text-xl font-bold text-primary mb-6 font-headline">Top Yielding Regions</h3>
+        {/* Visitor Traffic & Referrers */}
+        <div className="col-span-12 lg:col-span-6 bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-outline-variant/5">
+          <h3 className="text-xl font-bold text-primary mb-6 font-headline">Top Referrers</h3>
           <div className="space-y-4">
-            {data.yieldRegions.map((yr: any, idx: number) => (
-              <div key={idx} className="flex items-center p-4 bg-surface rounded-xl hover:translate-x-2 transition-transform cursor-pointer">
-                <span className="text-lg font-bold text-slate-300 w-8">0{idx + 1}</span>
+            {data.referrers?.length > 0 ? data.referrers.map((ref: any, idx: number) => (
+              <div key={idx} className="flex justify-between items-center p-4 bg-surface rounded-xl">
+                <p className="text-sm font-bold text-primary truncate mr-4">{ref.source}</p>
+                <div className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">{ref.count} Visits</div>
+              </div>
+            )) : <p className="text-sm text-slate-500 italic">No referrer data available.</p>}
+          </div>
+        </div>
+
+        {/* Visitor Locations */}
+        <div className="col-span-12 lg:col-span-6 bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-outline-variant/5">
+          <h3 className="text-xl font-bold text-primary mb-6 font-headline">Visitor Locations</h3>
+          <div className="space-y-4">
+            {data.locations?.length > 0 ? data.locations.map((loc: any, idx: number) => (
+              <div key={idx} className="flex justify-between items-center p-4 bg-surface rounded-xl">
+                <div className="flex items-center gap-3">
+                  <MaterialIcon name="place" className="text-secondary/50 text-sm" />
+                  <p className="text-sm font-bold text-primary truncate">{loc.location}</p>
+                </div>
+                <div className="px-3 py-1 bg-secondary/10 text-secondary text-xs font-bold rounded-full">{loc.count} Users</div>
+              </div>
+            )) : <p className="text-sm text-slate-500 italic">No location data available.</p>}
+          </div>
+        </div>
+
+        {/* Regions */}
+        <div className="col-span-12 lg:col-span-12 bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-outline-variant/5">
+          <h3 className="text-xl font-bold text-primary mb-6 font-headline">Top Yielding Regions (Actual Revenue)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {data.yieldRegions?.map((yr: any, idx: number) => (
+              <div key={idx} className="flex items-center p-5 bg-surface rounded-xl shadow-sm border border-outline-variant/10">
+                <div className="w-10 h-10 bg-primary/5 rounded-full flex justify-center items-center mr-4">
+                  <span className="text-lg font-bold text-primary/50">{idx + 1}</span>
+                </div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-primary">{yr.region}</p>
+                  <p className="text-sm font-bold text-primary mb-1">{yr.region}</p>
+                  <p className="text-[10px] text-tertiary-container font-bold">+{yr.growth}% Growth</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-extrabold text-primary">${(yr.volume/1000).toFixed(0)}K</p>
-                  <p className="text-[10px] text-tertiary-container font-bold">+{yr.growth}% MoM</p>
+                  <p className="text-lg font-black text-primary">${(yr.volume/100).toFixed(2)}</p>
                 </div>
               </div>
             ))}

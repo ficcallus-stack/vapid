@@ -9,6 +9,7 @@ import { PostHogProvider } from "@/components/providers/PostHogProvider";
 import { AuthGuard } from "@/components/providers/AuthGuard";
 import AblyClientProvider from "@/components/AblyProvider";
 import Navbar from "@/components/Navbar";
+import { AnalyticsTracker } from "@/components/AnalyticsTracker";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -100,6 +101,7 @@ export default async function RootLayout({
           />
         </head>
         <body className="antialiased bg-surface text-on-surface font-body min-h-screen flex flex-col">
+          <AnalyticsTracker />
           <ImpersonationBanner isImpersonating={isImpersonating} />
           <ToastProvider>
             <AuthGuard />

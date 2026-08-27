@@ -1,25 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import SafetyOpsTab from "./SafetyOpsTab";
 import FinancialIntelTab from "./FinancialIntelTab";
 import MarketplaceHealthTab from "./MarketplaceHealthTab";
 import MarketplaceGeoMap from "@/components/admin/MarketplaceGeoMap";
 import { MaterialIcon } from "@/components/MaterialIcon";
+import { getMarketplaceHealthData } from "./actions";
 
 type Tab = "financial" | "marketplace" | "safety";
 
 export default function AnalyticsClient({ 
   safetyData, 
   financialData, 
-  marketplaceData 
+  marketplaceData: initialMarketplaceData
 }: { 
   safetyData: any, 
   financialData: any, 
   marketplaceData: any 
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("safety");
+  const [marketplaceData, setMarketplaceData] = useState(initialMarketplaceData);
+  const [timeFilter, setTimeFilter] = useState<"1h" | "24h" | "7d" | "30d" | "all">("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    async function refreshData() {
+      setIsRefreshing(true);
+      try {
+        const newData = await getMarketplaceHealthData(timeFilter);
+        setMarketplaceData(newData);
+      } catch (err) {
+        console.error("Failed to fetch fresh marketplace data", err);
+      } finally {
+        setIsRefreshing(false);
+      }
+    }
+    refreshData();
+  }, [timeFilter]);
 
   return (
     <div className="bg-surface min-h-screen text-on-surface">
@@ -104,6 +123,22 @@ export default function AnalyticsClient({
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-10"
               >
+                <div className="flex justify-end items-center gap-4 mb-4">
+                  <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Time Range:</span>
+                  <select
+                    value={timeFilter}
+                    onChange={(e) => setTimeFilter(e.target.value as any)}
+                    className="bg-white border border-outline-variant/20 rounded-xl px-4 py-2 text-sm font-bold text-primary focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50"
+                    disabled={isRefreshing}
+                  >
+                    <option value="1h">Last Hour</option>
+                    <option value="24h">Today</option>
+                    <option value="7d">This Week</option>
+                    <option value="30d">Last Month</option>
+                    <option value="all">All Time</option>
+                  </select>
+                  {isRefreshing && <span className="text-primary text-xs animate-pulse font-bold">Refreshing...</span>}
+                </div>
                 <MarketplaceGeoMap />
                 <MarketplaceHealthTab data={marketplaceData} />
               </motion.div>
