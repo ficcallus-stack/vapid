@@ -61,6 +61,7 @@ export default async function RootLayout({
         "name": "KindredCare US",
         "url": "https://kindredcareus.com",
         "logo": "https://kindredcareus.com/favicon.png",
+        "description": "Bespoke Care for Your Little Ones. Connecting elite families with the nation's most trusted, certified caregivers.",
         "sameAs": [
           "https://www.facebook.com/kindredcareus",
           "https://www.instagram.com/kindredcareus"
@@ -71,6 +72,7 @@ export default async function RootLayout({
         "@id": "https://kindredcareus.com/#website",
         "url": "https://kindredcareus.com",
         "name": "KindredCare US",
+        "description": "Trusted Childcare Professionals",
         "publisher": {
           "@id": "https://kindredcareus.com/#organization"
         },
@@ -81,7 +83,29 @@ export default async function RootLayout({
             "urlTemplate": "https://kindredcareus.com/browse?location={search_term_string}"
           },
           "query-input": "required name=search_term_string"
-        }
+        },
+        "hasPart": [
+          {
+            "@type": "WebPage",
+            "name": "Sign up for KindredCare",
+            "url": "https://kindredcareus.com/signup"
+          },
+          {
+            "@type": "WebPage",
+            "name": "Browse Nannies",
+            "url": "https://kindredcareus.com/browse"
+          },
+          {
+            "@type": "WebPage",
+            "name": "Trust & Safety",
+            "url": "https://kindredcareus.com/safety"
+          },
+          {
+            "@type": "WebPage",
+            "name": "FAQ",
+            "url": "https://kindredcareus.com/faq"
+          }
+        ]
       }
     ]
   };

@@ -103,17 +103,24 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   
   if (!nanny) return { title: 'Not Found' };
   
-  const title = `${nanny.name} - Premium Childcare Excellence | KindredCare`;
-  const description = nanny.bio || `Hire ${nanny.name}, a vetted caregiver with ${nanny.experienceYears} years of experience. Rate: $${nanny.hourlyRate}/hr`;
+  const bioSnippet = nanny.bio ? (nanny.bio.length > 50 ? nanny.bio.substring(0, 50) + "..." : nanny.bio) : `${nanny.experienceYears} yrs experience`;
+  const locationSnippet = nanny.location ? ` in ${nanny.location}` : "";
+  const skillsSnippet = nanny.coreSkills && nanny.coreSkills.length > 0 ? ` | Skills: ${nanny.coreSkills.slice(0, 3).join(", ")}` : "";
+  const title = `Hire ${nanny.name}${locationSnippet} - ${bioSnippet} | KindredCare`;
+  const description = `Hire ${nanny.name}, a vetted caregiver${locationSnippet} with ${nanny.experienceYears} years of experience. Rate: $${nanny.hourlyRate}/hr, Weekly Retainer: $${nanny.weeklyRate || "N/A"}${skillsSnippet}. ${nanny.bio ? nanny.bio.substring(0, 100) + '...' : ''}`;
 
   return {
     title,
     description,
+    keywords: ["nanny", nanny.name, "hire nanny", nanny.location, ...(nanny.coreSkills || [])].filter(Boolean) as string[],
     openGraph: {
       title,
       description,
       type: 'profile',
       images: [nanny.profileImageUrl || nanny.photos?.[0] || ""],
+    },
+    alternates: {
+      canonical: `https://kindredcareus.com/nannies/${id}`
     }
   };
 }
@@ -146,6 +153,37 @@ export default async function NannyPublicProfile({ params }: { params: Promise<{
     );
   }
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    "mainEntity": {
+      "@type": "Person",
+      "name": nanny.name,
+      "description": nanny.bio,
+      "image": nanny.profileImageUrl || nanny.photos?.[0],
+      "jobTitle": "Nanny",
+      "homeLocation": {
+        "@type": "Place",
+        "name": nanny.location
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": nanny.hourlyRate,
+        "priceCurrency": "USD",
+        "unitText": "HOUR"
+      },
+      "knowsAbout": nanny.coreSkills
+    }
+  };
+
   // Pass everything to the Client Component for the premium UI
-  return <NannyPublicProfileClient nanny={nanny} reviews={nannyReviews} />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <NannyPublicProfileClient nanny={nanny} reviews={nannyReviews} />
+    </>
+  );
 }

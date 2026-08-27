@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { MaterialIcon } from "@/components/MaterialIcon";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import FAQStructuredData from "@/components/seo/FAQStructuredData";
 
 type Role = "family" | "nanny";
 
@@ -190,9 +191,30 @@ export default function FAQPage() {
 
   const activeSections = activeRole === "family" ? familySections : nannySections;
 
+  const faqsForStructuredData = useMemo(() => {
+    const allQuestions: { q: string; a: string }[] = [];
+
+    // Extract family questions
+    familySections.forEach(section => {
+      if ("questions" in section && Array.isArray(section.questions)) {
+        allQuestions.push(...section.questions);
+      }
+    });
+
+    // Extract nanny questions if any were present in simple q/a format
+    // Currently, nanny sections use custom content, but this ensures future-proofing
+    nannySections.forEach(section => {
+      if ("questions" in section && Array.isArray((section as any).questions)) {
+        allQuestions.push(...(section as any).questions);
+      }
+    });
+
+    return allQuestions;
+  }, [familySections, nannySections]);
+
   return (
     <div className="bg-surface font-body text-on-surface antialiased">
-      
+      <FAQStructuredData faqs={faqsForStructuredData} />
       <main className="pt-24 min-h-screen">
         {/* Hero Search Section */}
         <section className="max-w-7xl mx-auto px-8 py-16">
