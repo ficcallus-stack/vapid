@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { db } from "@/db";
 import { jobs, users, nannyProfiles } from "@/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, ilike } from "drizzle-orm";
 import { syncUser } from "@/lib/user-sync";
 import { canViewJobs } from "@/lib/nanny-guards";
 import { Metadata } from "next";
@@ -67,7 +67,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   .where(
     and(
       eq(jobs.status, "open"),
-      query ? sql`LOWER(${jobs.title}) LIKE LOWER(${'%' + query + '%'})` : undefined
+      query ? ilike(jobs.title, `%${query}%`) : undefined
     )
   )
   .orderBy(desc(jobs.createdAt));
