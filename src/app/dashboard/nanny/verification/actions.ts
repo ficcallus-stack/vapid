@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { caregiverVerifications, nannyProfiles, users, referenceSubmissions, auditLogs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { uploadToR2 } from "@/lib/r2";
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -193,7 +194,7 @@ export async function submitReferences(referencesJson: string) {
   for (const ref of refs) {
     if (!ref.email || !ref.name) continue;
 
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const token = randomBytes(32).toString('hex');
     
     await db.insert(referenceSubmissions).values({
       caregiverId: userId,
