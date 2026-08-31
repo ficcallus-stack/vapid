@@ -33,7 +33,11 @@ export const users = pgTable("users", {
   profileImageUrl: text("profile_image_url"),
   role: userRoleEnum("role").notNull(),
   emailVerified: boolean("email_verified").default(false).notNull(),
-  referralCode: text("referral_code").unique().$defaultFn(() => Math.random().toString(36).substring(2, 8).toUpperCase()),
+  referralCode: text("referral_code").unique().$defaultFn(() => {
+    const array = new Uint8Array(6);
+    globalThis.crypto.getRandomValues(array);
+    return Array.from(array, byte => byte.toString(36).padStart(2, '0')).join('').substring(0, 6).toUpperCase();
+  }),
   referredBy: text("referred_by"),
   referralBalance: integer("referral_balance").default(0).notNull(), // points/cents
   stripeConnectId: text("stripe_connect_id"),

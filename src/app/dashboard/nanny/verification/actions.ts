@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { uploadToR2 } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
 import { rateLimit } from "@/lib/rate-limit";
+import crypto from "crypto";
 
 export async function getVerificationData(userId?: string) {
   const finalUserId = userId || (await requireUser()).uid;
@@ -193,7 +194,7 @@ export async function submitReferences(referencesJson: string) {
   for (const ref of refs) {
     if (!ref.email || !ref.name) continue;
 
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const token = crypto.randomBytes(16).toString('hex');
     
     await db.insert(referenceSubmissions).values({
       caregiverId: userId,
