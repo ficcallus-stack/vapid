@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { getServerUser } from "@/lib/get-server-user";
 import { db } from "@/db";
 import { emailOtps, users } from "@/db/schema";
+import crypto from "node:crypto";
 import { eq, and, gt } from "drizzle-orm";
 import { sendOTPEmail } from "@/lib/email";
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate 6-digit OTP
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store in DB
