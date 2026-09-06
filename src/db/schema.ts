@@ -1,5 +1,6 @@
 import { pgTable, text, timestamp, boolean, decimal, integer, pgEnum, primaryKey, jsonb, foreignKey, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { randomBytes } from "crypto";
 
 // ── Enums ──────────────────────────────────────────────────
 export const userRoleEnum = pgEnum("user_role", ["parent", "caregiver", "admin", "moderator"]);
@@ -33,7 +34,7 @@ export const users = pgTable("users", {
   profileImageUrl: text("profile_image_url"),
   role: userRoleEnum("role").notNull(),
   emailVerified: boolean("email_verified").default(false).notNull(),
-  referralCode: text("referral_code").unique().$defaultFn(() => Math.random().toString(36).substring(2, 8).toUpperCase()),
+  referralCode: text("referral_code").unique().$defaultFn(() => randomBytes(4).toString('hex').toUpperCase()),
   referredBy: text("referred_by"),
   referralBalance: integer("referral_balance").default(0).notNull(), // points/cents
   stripeConnectId: text("stripe_connect_id"),
