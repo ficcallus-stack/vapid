@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { emailOtps, users } from "@/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { sendOTPEmail } from "@/lib/email";
+import crypto from "crypto";
 
 // POST — Generate and send OTP
 export async function POST(request: NextRequest) {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate 6-digit OTP
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = crypto.randomInt(100000, 1000000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // Store in DB
